@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, Fragment } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -556,8 +556,8 @@ export default function OrdersPage() {
                 </thead>
                 <tbody>
                   {orders.map((order, idx) => (
-                    <>
-                      <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                    <Fragment key={order.id}>
+                      <tr className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-3">
                           <input type="checkbox" className="rounded border-gray-300" />
                         </td>
@@ -634,7 +634,7 @@ export default function OrdersPage() {
                       </tr>
                       {/* 추가답변 Inline Area */}
                       {expandedAnswerId === order.id && (
-                        <tr key={`answer-${order.id}`}>
+                        <tr>
                           <td colSpan={9} className="px-6 py-4 bg-yellow-50 border-b border-yellow-100">
                             <div className="space-y-2">
                               <p className="text-xs font-bold text-yellow-700">추가답변</p>
@@ -664,7 +664,7 @@ export default function OrdersPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
