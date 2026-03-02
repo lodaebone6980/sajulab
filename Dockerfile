@@ -25,12 +25,16 @@ RUN apt-get update && apt-get install -y \
 
 ENV NODE_ENV=production
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
-# 앱 파일 복사
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
+# standalone 출력 복사 (server.js + 최소 node_modules 포함)
+COPY --from=builder /app/.next/standalone ./
+# static 파일 복사
+COPY --from=builder /app/.next/static ./.next/static
+# public 폴더 복사
 COPY --from=builder /app/public ./public
+# 폰트 복사
 COPY --from=builder /app/fonts ./fonts
 
 # 데이터 디렉토리 생성
@@ -38,4 +42,4 @@ RUN mkdir -p /app/data/pdfs
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", "server.js"]
