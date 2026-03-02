@@ -7,6 +7,8 @@ import {
   getOrderById,
   getProducts,
   updateOrderStatus,
+  updateOrderResult,
+  getDb,
 } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { generateSajuPdf } from '@/lib/pdf/generator';
@@ -210,22 +212,35 @@ export async function POST(request: NextRequest) {
       // Mark as analyzing
       updateOrderStatus(orderId, userId, 'analyzing');
 
-      // Generate PDF
-      const pdfBuffer = await generateSajuPdf(sajuResult, {
-        customerName,
-        productName: product.name,
-        productCode: product.code,
-      });
+      // Save result_json to database
+      const resultJson = JSON.stringify(sajuResult);
+      updateOrderResult(orderId, userId, resultJson);
 
-      // Save PDF to file
-      const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
-      if (!fs.existsSync(pdfDir)) {
-        fs.mkdirSync(pdfDir, { recursive: true });
+      // Generate PDF (skip for saju-data product)
+      if (product.code !== 'saju-data') {
+        updateOrderStatus(orderId, userId, 'pdf_generating');
+
+        const pdfBuffer = await generateSajuPdf(sajuResult, {
+          customerName,
+          productName: product.name,
+          productCode: product.code,
+        });
+
+        // Save PDF to file
+        const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
+        if (!fs.existsSync(pdfDir)) {
+          fs.mkdirSync(pdfDir, { recursive: true });
+        }
+        const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
+        fs.writeFileSync(pdfPath, pdfBuffer);
+
+        // Save pdf_url
+        const db = getDb();
+        db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+          .run(`/api/orders/${orderId}/pdf`, orderId, userId);
       }
-      const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
-      fs.writeFileSync(pdfPath, pdfBuffer);
 
-      // Mark as PDF generating (completed)
+      // Mark as completed
       updateOrderStatus(orderId, userId, 'completed');
     } catch (analysisError) {
       console.error('Analysis error:', analysisError);
