@@ -25,12 +25,37 @@ interface OrderDetail {
   product_code: string;
 }
 
+interface FortuneDataResponse {
+  orderId: number;
+  customerName: string;
+  totalLines: number;
+  sections: Record<string, unknown>;
+  narrative: { model: string; tokenUsage: { prompt: number; completion: number }; chapters: unknown[] } | null;
+}
+
+const SECTION_LABELS: Record<string, string> = {
+  info: '기본 정보',
+  pillar: '사주원국 (四柱)',
+  yongsin: '용신 (用神)',
+  yinyang: '음양오행 (陰陽五行)',
+  shinsal: '신살 (神殺)',
+  hyungchung: '형충회합 (刑沖會合)',
+  daeun: '대운 (大運)',
+  nyunun: '년운 (年運)',
+  wolun: '월운 상반기 (月運)',
+  wolun2: '월운 하반기 (月運)',
+};
+
 export default function OrderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showDataModal, setShowDataModal] = useState(false);
+  const [fortuneData, setFortuneData] = useState<FortuneDataResponse | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
+  const [activeSection, setActiveSection] = useState('info');
 
   useEffect(() => {
     fetchOrder();
@@ -109,6 +134,24 @@ export default function OrderDetailPage() {
     return statusMap[status] || status;
   };
 
+  const handleOpenDataModal = async () => {
+    setShowDataModal(true);
+    if (!fortuneData) {
+      setDataLoading(true);
+      try {
+        const response = await fetch(`/api/orders/${params.id}/data`);
+        if (response.ok) {
+          const data = await response.json();
+          setFortuneData(data);
+        }
+      } catch (err) {
+        console.error('Fortune data fetch failed:', err);
+      } finally {
+        setDataLoading(false);
+      }
+    }
+  };
+
   const getGenderLabel = (gender: string) => gender === 'male' ? '남' : '여';
   const getCalendarLabel = (type: string) => {
     const map: { [key: string]: string } = { solar: '양력', lunar: '음력', leap: '윤달' };
@@ -161,12 +204,20 @@ export default function OrderDetailPage() {
           </div>
           <div className="flex items-center gap-3">
             {order.status === 'completed' && (
-              <button
-                onClick={handleDownloadPdf}
-                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm"
-              >
-                PDF 다운로드
-              </button>
+              <>
+                <button
+                  onClick={handleOpenDataModal}
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg text-sm"
+                >
+                  데이터
+                </button>
+                <button
+                  onClick={handleDownloadPdf}
+                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-lg text-sm"
+                >
+                  PDF 다운로드
+                </button>
+              </>
             )}
             <span className={`px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(order.status)}`}>
               {getStatusLabel(order.status)}
@@ -261,16 +312,111 @@ export default function OrderDetailPage() {
           </div>
         </div>
 
-        {/* Result JSON */}
+        {/* Result JSON (raw) */}
         {order.result_json && (
           <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">분석 결과</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900">분석 결과 (Raw)</h2>
+              <button
+                onClick={handleOpenDataModal}
+                className="text-sm text-indigo-500 hover:text-indigo-600 font-medium"
+              >
+                10섹션 데이터 보기 →
+              </button>
+            </div>
             <pre className="bg-gray-50 rounded-lg p-4 text-xs text-gray-700 overflow-x-auto max-h-96">
               {JSON.stringify(JSON.parse(order.result_json), null, 2)}
             </pre>
           </div>
         )}
       </div>
+
+      {/* 데이터 모달 (sajulab.kr 스타일) */}
+      {showDataModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-gray-900">운세 데이터</h2>
+                {fortuneData && (
+                  <span className="text-sm text-gray-500">
+                    {fortuneData.customerName} · {fortuneData.totalLines}줄
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowDataModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            {dataLoading ? (
+              <div className="flex-1 flex items-center justify-center py-20">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+              </div>
+            ) : fortuneData ? (
+              <div className="flex flex-1 overflow-hidden">
+                {/* 좌측 탭 메뉴 */}
+                <div className="w-52 border-r border-gray-200 overflow-y-auto bg-gray-50">
+                  {Object.keys(SECTION_LABELS).map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => setActiveSection(key)}
+                      className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 transition-colors ${
+                        activeSection === key
+                          ? 'bg-indigo-50 text-indigo-700 font-semibold border-l-4 border-l-indigo-500'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {SECTION_LABELS[key]}
+                    </button>
+                  ))}
+                  {fortuneData.narrative && (
+                    <button
+                      onClick={() => setActiveSection('narrative')}
+                      className={`w-full text-left px-4 py-3 text-sm border-b border-gray-100 transition-colors ${
+                        activeSection === 'narrative'
+                          ? 'bg-indigo-50 text-indigo-700 font-semibold border-l-4 border-l-indigo-500'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      LLM 내러티브
+                    </button>
+                  )}
+                </div>
+
+                {/* 우측 데이터 표시 */}
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-lg font-bold text-gray-900">
+                      {activeSection === 'narrative' ? 'LLM 내러티브' : SECTION_LABELS[activeSection]}
+                    </h3>
+                    <span className="text-xs text-gray-400">
+                      {activeSection === 'narrative' && fortuneData.narrative
+                        ? `${fortuneData.narrative.model} · ${fortuneData.narrative.tokenUsage.prompt + fortuneData.narrative.tokenUsage.completion} tokens`
+                        : `${JSON.stringify(fortuneData.sections[activeSection], null, 2).split('\n').length}줄`
+                      }
+                    </span>
+                  </div>
+                  <pre className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-xs text-gray-700 overflow-x-auto whitespace-pre-wrap font-mono leading-relaxed">
+                    {activeSection === 'narrative' && fortuneData.narrative
+                      ? JSON.stringify(fortuneData.narrative, null, 2)
+                      : JSON.stringify(fortuneData.sections[activeSection], null, 2)
+                    }
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center py-20 text-gray-500">
+                데이터가 없습니다. 주문을 먼저 완료해주세요.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </DashboardLayout>
   );
 }

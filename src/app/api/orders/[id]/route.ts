@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getOrderById, updateOrderStatus, updateOrderResult, updateCustomer, getDb } from '@/lib/db/index';
+import { getOrderById, updateOrderStatus, updateOrderResult, updateCustomer, getDb, saveFortuneData, saveNarrative } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
+import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
 import { generateSajuPdf } from '@/lib/pdf/generator';
 import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
 import path from 'path';
@@ -131,6 +132,26 @@ async function runReanalysis(orderId: number, userId: number) {
     const resultJson = JSON.stringify(sajuResult);
     updateOrderResult(orderId, userId, resultJson);
 
+    // 운세 데이터 10섹션 저장
+    try {
+      const sections = convertSajuResultToSections(sajuResult, order.customer_name, order.customer_gender, order.customer_calendar_type);
+      const totalLines = countTotalLines(sections);
+      saveFortuneData(orderId, order.customer_name, JSON.stringify(sajuResult.birthInfo), {
+        info: JSON.stringify(sections.info),
+        pillar: JSON.stringify(sections.pillar),
+        yongsin: JSON.stringify(sections.yongsin),
+        yinyang: JSON.stringify(sections.yinyang),
+        shinsal: JSON.stringify(sections.shinsal),
+        hyungchung: JSON.stringify(sections.hyungchung),
+        daeun: JSON.stringify(sections.daeun),
+        nyunun: JSON.stringify(sections.nyunun),
+        wolun: JSON.stringify(sections.wolun),
+        wolun2: JSON.stringify(sections.wolun2),
+      }, totalLines);
+    } catch (fdError) {
+      console.error('Fortune data save error (non-fatal):', fdError);
+    }
+
     // Generate PDF (skip for saju-data product)
     if (order.product_code !== 'saju-data') {
       updateOrderStatus(orderId, userId, 'pdf_generating');
@@ -139,6 +160,21 @@ async function runReanalysis(orderId: number, userId: number) {
       let narrative = await generateNarrative(sajuResult, order.customer_name, order.product_code);
       if (!narrative) {
         narrative = generateFallbackNarrative(sajuResult, order.customer_name, order.product_code);
+      }
+
+      // LLM 내러티브 DB 캐시 저장
+      if (narrative) {
+        try {
+          saveNarrative(orderId, order.product_code, {
+            greeting: narrative.greeting,
+            chapters: JSON.stringify(narrative.chapters),
+            model: narrative.model || 'fallback',
+            promptTokens: narrative.tokenUsage?.input || 0,
+            completionTokens: narrative.tokenUsage?.output || 0,
+          });
+        } catch (nErr) {
+          console.error('Narrative save error (non-fatal):', nErr);
+        }
       }
 
       const pdfBuffer = await generateSajuPdf(sajuResult, {

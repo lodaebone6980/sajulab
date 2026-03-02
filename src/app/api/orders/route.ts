@@ -11,8 +11,10 @@ import {
   getDb,
 } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
+import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
 import { generateSajuPdf } from '@/lib/pdf/generator';
 import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
+import { saveFortuneData, saveNarrative } from '@/lib/db/index';
 import path from 'path';
 import fs from 'fs';
 
@@ -217,6 +219,26 @@ export async function POST(request: NextRequest) {
       const resultJson = JSON.stringify(sajuResult);
       updateOrderResult(orderId, userId, resultJson);
 
+      // 운세 데이터 10섹션 저장 (sajulab.kr 동일 구조)
+      try {
+        const sections = convertSajuResultToSections(sajuResult, customerName, gender, calendarType || 'solar');
+        const totalLines = countTotalLines(sections);
+        saveFortuneData(orderId, customerName, JSON.stringify(sajuResult.birthInfo), {
+          info: JSON.stringify(sections.info),
+          pillar: JSON.stringify(sections.pillar),
+          yongsin: JSON.stringify(sections.yongsin),
+          yinyang: JSON.stringify(sections.yinyang),
+          shinsal: JSON.stringify(sections.shinsal),
+          hyungchung: JSON.stringify(sections.hyungchung),
+          daeun: JSON.stringify(sections.daeun),
+          nyunun: JSON.stringify(sections.nyunun),
+          wolun: JSON.stringify(sections.wolun),
+          wolun2: JSON.stringify(sections.wolun2),
+        }, totalLines);
+      } catch (fdError) {
+        console.error('Fortune data save error (non-fatal):', fdError);
+      }
+
       // Generate PDF (skip for saju-data product)
       if (product.code !== 'saju-data') {
         updateOrderStatus(orderId, userId, 'pdf_generating');
@@ -227,6 +249,21 @@ export async function POST(request: NextRequest) {
         // API 키 없으면 fallback 내러티브 사용
         if (!narrative) {
           narrative = generateFallbackNarrative(sajuResult, customerName, product.code);
+        }
+
+        // LLM 내러티브 DB 캐시 저장
+        if (narrative) {
+          try {
+            saveNarrative(orderId, product.code, {
+              greeting: narrative.greeting,
+              chapters: JSON.stringify(narrative.chapters),
+              model: narrative.model || 'fallback',
+              promptTokens: narrative.tokenUsage?.input || 0,
+              completionTokens: narrative.tokenUsage?.output || 0,
+            });
+          } catch (nErr) {
+            console.error('Narrative save error (non-fatal):', nErr);
+          }
         }
 
         const pdfBuffer = await generateSajuPdf(sajuResult, {

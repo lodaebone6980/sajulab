@@ -165,6 +165,41 @@ function initializeDb(db: Database.Database) {
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
+    -- 운세 데이터 (sajulab.kr 10섹션 구조)
+    CREATE TABLE IF NOT EXISTS saju_fortune_data (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL UNIQUE,
+      customer_name TEXT DEFAULT '',
+      birth_info TEXT DEFAULT '',
+      section_info TEXT DEFAULT '{}',
+      section_pillar TEXT DEFAULT '{}',
+      section_yongsin TEXT DEFAULT '{}',
+      section_yinyang TEXT DEFAULT '{}',
+      section_shinsal TEXT DEFAULT '{}',
+      section_hyungchung TEXT DEFAULT '{}',
+      section_daeun TEXT DEFAULT '{}',
+      section_nyunun TEXT DEFAULT '{}',
+      section_wolun TEXT DEFAULT '{}',
+      section_wolun2 TEXT DEFAULT '{}',
+      total_lines INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id)
+    );
+
+    -- LLM 내러티브 캐시
+    CREATE TABLE IF NOT EXISTS saju_narratives (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL UNIQUE,
+      product_code TEXT NOT NULL,
+      greeting TEXT DEFAULT '',
+      chapters_json TEXT DEFAULT '[]',
+      model TEXT DEFAULT '',
+      prompt_tokens INTEGER DEFAULT 0,
+      completion_tokens INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
     CREATE INDEX IF NOT EXISTS idx_customers_user_id ON customers(user_id);
     CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);
@@ -173,6 +208,8 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_consultations_customer_id ON consultations(customer_id);
     CREATE INDEX IF NOT EXISTS idx_point_history_user_id ON point_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_journals_user_id ON journals(user_id);
+    CREATE INDEX IF NOT EXISTS idx_saju_fortune_data_order_id ON saju_fortune_data(order_id);
+    CREATE INDEX IF NOT EXISTS idx_saju_narratives_order_id ON saju_narratives(order_id);
   `);
 
   // Migration: cover_image column 추가
@@ -516,6 +553,72 @@ export function saveSajuResult(
 export function getUserSajuResults(userId: number) {
   const db = getDb();
   return db.prepare('SELECT * FROM saju_results WHERE user_id = ? ORDER BY created_at DESC').all(userId);
+}
+
+// ============ 운세 데이터 (10섹션) ============
+export function saveFortuneData(orderId: number, customerName: string, birthInfo: string, sections: {
+  info: string; pillar: string; yongsin: string; yinyang: string;
+  shinsal: string; hyungchung: string; daeun: string;
+  nyunun: string; wolun: string; wolun2: string;
+}, totalLines: number) {
+  const db = getDb();
+  // UPSERT: 이미 있으면 업데이트
+  db.prepare(`
+    INSERT INTO saju_fortune_data (order_id, customer_name, birth_info, section_info, section_pillar, section_yongsin, section_yinyang, section_shinsal, section_hyungchung, section_daeun, section_nyunun, section_wolun, section_wolun2, total_lines)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(order_id) DO UPDATE SET
+      customer_name = excluded.customer_name,
+      birth_info = excluded.birth_info,
+      section_info = excluded.section_info,
+      section_pillar = excluded.section_pillar,
+      section_yongsin = excluded.section_yongsin,
+      section_yinyang = excluded.section_yinyang,
+      section_shinsal = excluded.section_shinsal,
+      section_hyungchung = excluded.section_hyungchung,
+      section_daeun = excluded.section_daeun,
+      section_nyunun = excluded.section_nyunun,
+      section_wolun = excluded.section_wolun,
+      section_wolun2 = excluded.section_wolun2,
+      total_lines = excluded.total_lines
+  `).run(orderId, customerName, birthInfo, sections.info, sections.pillar, sections.yongsin, sections.yinyang, sections.shinsal, sections.hyungchung, sections.daeun, sections.nyunun, sections.wolun, sections.wolun2, totalLines);
+}
+
+export function getFortuneData(orderId: number) {
+  const db = getDb();
+  return db.prepare('SELECT * FROM saju_fortune_data WHERE order_id = ?').get(orderId) as {
+    id: number; order_id: number; customer_name: string; birth_info: string;
+    section_info: string; section_pillar: string; section_yongsin: string; section_yinyang: string;
+    section_shinsal: string; section_hyungchung: string; section_daeun: string;
+    section_nyunun: string; section_wolun: string; section_wolun2: string;
+    total_lines: number; created_at: string;
+  } | undefined;
+}
+
+// ============ LLM 내러티브 캐시 ============
+export function saveNarrative(orderId: number, productCode: string, data: {
+  greeting: string; chapters: string; model: string; promptTokens: number; completionTokens: number;
+}) {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO saju_narratives (order_id, product_code, greeting, chapters_json, model, prompt_tokens, completion_tokens)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(order_id) DO UPDATE SET
+      product_code = excluded.product_code,
+      greeting = excluded.greeting,
+      chapters_json = excluded.chapters_json,
+      model = excluded.model,
+      prompt_tokens = excluded.prompt_tokens,
+      completion_tokens = excluded.completion_tokens
+  `).run(orderId, productCode, data.greeting, data.chapters, data.model, data.promptTokens, data.completionTokens);
+}
+
+export function getNarrative(orderId: number) {
+  const db = getDb();
+  return db.prepare('SELECT * FROM saju_narratives WHERE order_id = ?').get(orderId) as {
+    id: number; order_id: number; product_code: string; greeting: string;
+    chapters_json: string; model: string; prompt_tokens: number; completion_tokens: number;
+    created_at: string;
+  } | undefined;
 }
 
 // ============ admin 시드 ============
