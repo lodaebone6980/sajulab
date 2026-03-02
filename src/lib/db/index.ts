@@ -179,6 +179,33 @@ function initializeDb(db: Database.Database) {
   try {
     db.exec(`ALTER TABLE products ADD COLUMN cover_image TEXT DEFAULT ''`);
   } catch { /* already exists */ }
+
+  // Auto-seed admin user if no users exist
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+  if (userCount.count === 0) {
+    // Use bcryptjs synchronous hash for initialization
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = bcrypt.hashSync('admin1234', 12);
+    db.prepare(
+      "INSERT INTO users (email, password, name, role, points, shop_name) VALUES (?, ?, ?, 'admin', 999999999, '사주연구소')"
+    ).run('admin@sajulab.kr', hashedPassword, '관리자');
+
+    // Also seed default products for the admin user
+    const admin = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@sajulab.kr') as { id: number };
+    if (admin) {
+      const defaults = [
+        { name: '1300줄 사주 데이터', code: 'saju-data', description: '상세 사주 원본 데이터', price_points: 500, sort_order: 1 },
+        { name: 'A.기본분석', code: 'saju-basic', description: '사주팔자 기본 분석', price_points: 1000, sort_order: 2 },
+        { name: 'C.신년운세', code: 'saju-newyear', description: '2026년 신년운세 분석', price_points: 2000, sort_order: 3 },
+        { name: 'B.고급분석', code: 'saju-premium', description: '심층 사주 분석 (성격, 직업, 재물, 건강, 애정)', price_points: 2000, sort_order: 4 },
+        { name: 'D.궁합분석', code: 'saju-love', description: '두 사람의 사주 궁합 분석', price_points: 3000, sort_order: 5 },
+      ];
+      const stmt = db.prepare('INSERT INTO products (user_id, name, code, description, price_points, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const p of defaults) {
+        stmt.run(admin.id, p.name, p.code, p.description, p.price_points, p.sort_order);
+      }
+    }
+  }
 }
 
 // ============ 사용자 ============
