@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import path from 'path';
 import fs from 'fs';
 import type { SajuResult } from '@/lib/saju/types';
+import type { NarrativeResult } from '@/lib/ai';
 
 const FONTS_DIR = path.join(process.cwd(), 'fonts');
 const FONT_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
@@ -19,6 +20,7 @@ interface PdfOptions {
   customerName: string;
   productName: string;
   productCode: string;
+  narrative?: NarrativeResult | null;  // LLM 생성 내러티브 (있으면 사용)
 }
 
 export async function generateSajuPdf(
@@ -63,21 +65,26 @@ export async function generateSajuPdf(
         console.warn(`Font files missing: Regular=${fontRegularExists}, Bold=${fontBoldExists}. Using Helvetica.`);
       }
 
-      // Branch based on product code
-      switch (options.productCode) {
-        case 'saju-basic':
-          generateBasicPdf(doc, result, options, koreanFont, koreanBoldFont);
-          break;
-        case 'saju-newyear':
-          generateNewYearPdf(doc, result, options, koreanFont, koreanBoldFont);
-          break;
-        case 'saju-data':
-          generateDataPdf(doc, result, options, koreanFont, koreanBoldFont);
-          break;
-        case 'saju-premium':
-        default:
-          generatePremiumPdf(doc, result, options, koreanFont, koreanBoldFont);
-          break;
+      // LLM 내러티브가 있으면 AI 기반 PDF 생성, 없으면 기존 방식
+      if (options.narrative && options.narrative.chapters.length > 0 && options.productCode !== 'saju-data') {
+        generateNarrativePdf(doc, result, options, koreanFont, koreanBoldFont);
+      } else {
+        // 기존 방식 (fallback)
+        switch (options.productCode) {
+          case 'saju-basic':
+            generateBasicPdf(doc, result, options, koreanFont, koreanBoldFont);
+            break;
+          case 'saju-newyear':
+            generateNewYearPdf(doc, result, options, koreanFont, koreanBoldFont);
+            break;
+          case 'saju-data':
+            generateDataPdf(doc, result, options, koreanFont, koreanBoldFont);
+            break;
+          case 'saju-premium':
+          default:
+            generatePremiumPdf(doc, result, options, koreanFont, koreanBoldFont);
+            break;
+        }
       }
 
       doc.end();
@@ -88,7 +95,338 @@ export async function generateSajuPdf(
 }
 
 // ─────────────────────────────────────────────
-//  PRODUCT-SPECIFIC PDF GENERATORS
+//  AI 내러티브 기반 PDF 생성 (sajulab.kr 스타일)
+// ─────────────────────────────────────────────
+
+function generateNarrativePdf(
+  doc: PDFKit.PDFDocument,
+  result: SajuResult,
+  options: PdfOptions,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const narrative = options.narrative!;
+  const isBasic = options.productCode === 'saju-basic';
+
+  // 1. 표지
+  renderNarrativeCoverPage(doc, result, options, koreanFont, koreanBoldFont);
+
+  // 2. 인사말 페이지
+  doc.addPage();
+  renderGreetingPage(doc, options.customerName, narrative.greeting, koreanFont, koreanBoldFont);
+
+  // 3. 목차
+  doc.addPage();
+  renderNarrativeTableOfContents(doc, narrative.chapters, koreanFont, koreanBoldFont);
+
+  // 4. 사주원국표
+  doc.addPage();
+  renderFourPillars(doc, result, koreanFont, koreanBoldFont);
+
+  // 5. 음양오행 분포 (기본분석에서도 포함)
+  doc.addPage();
+  renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
+
+  // 6. 각 챕터별 내러티브
+  for (const chapter of narrative.chapters) {
+    doc.addPage();
+    renderNarrativeChapter(doc, chapter, koreanFont, koreanBoldFont);
+  }
+
+  // 7. 마무리 페이지
+  doc.addPage();
+  renderOutroPage(doc, options, koreanFont, koreanBoldFont);
+}
+
+// ─── 내러티브 표지 (sajulab.kr 스타일) ───
+
+function renderNarrativeCoverPage(
+  doc: PDFKit.PDFDocument,
+  result: SajuResult,
+  options: PdfOptions,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width, height } = doc.page;
+
+  // 배경 (진한 남색)
+  doc.rect(0, 0, width, height).fill('#0f172a');
+
+  // 브랜드 로고 텍스트
+  doc.font(koreanFont).fontSize(10).fillColor('#94a3b8');
+  doc.text('운명길잡이', 0, 80, { align: 'center', width });
+
+  // 상품별 타이틀
+  let title1 = '';
+  let title2 = '';
+  let subtitle = '';
+
+  switch (options.productCode) {
+    case 'saju-basic':
+      title1 = '사주팔자';
+      title2 = '운명 분석서';
+      subtitle = '당신의 운명을 밝혀드립니다';
+      break;
+    case 'saju-premium':
+      title1 = '프리미엄';
+      title2 = '사주 분석서';
+      subtitle = '심층 운명 분석';
+      break;
+    case 'saju-newyear':
+      title1 = `${new Date().getFullYear()} 신년운세`;
+      title2 = '새해 운명 가이드';
+      subtitle = `${new Date().getFullYear()}년 당신의 운세를 밝혀드립니다`;
+      break;
+    default:
+      title1 = '사주팔자';
+      title2 = '운명 분석서';
+      subtitle = '당신의 운명을 밝혀드립니다';
+  }
+
+  // 금색 장식선
+  doc.rect(width / 2 - 40, 180, 80, 1.5).fill('#d4af37');
+
+  // 메인 타이틀
+  doc.font(koreanBoldFont).fontSize(36).fillColor('#d4af37');
+  doc.text(title1, 0, 220, { align: 'center', width });
+  doc.text(title2, 0, 268, { align: 'center', width });
+
+  // 서브타이틀
+  doc.font(koreanFont).fontSize(13).fillColor('#94a3b8');
+  doc.text(subtitle, 0, 330, { align: 'center', width });
+
+  // 장식선
+  doc.rect(width / 2 - 40, 360, 80, 1.5).fill('#d4af37');
+
+  // 고객 정보 박스
+  const boxY = 420;
+  doc.roundedRect(width / 2 - 110, boxY, 220, 110, 10).fill('#1e293b');
+
+  doc.font(koreanBoldFont).fontSize(22).fillColor('#d4af37');
+  doc.text(options.customerName, 0, boxY + 20, { align: 'center', width });
+
+  const { birthInfo } = result;
+  doc.font(koreanFont).fontSize(11).fillColor('#94a3b8');
+  doc.text(
+    `${birthInfo.year}년 ${birthInfo.month}월 ${birthInfo.day}일`,
+    0, boxY + 55, { align: 'center', width }
+  );
+  doc.text(
+    `${birthInfo.isLunar ? '음력' : '양력'} | ${birthInfo.gender === 'male' ? '남성' : '여성'}`,
+    0, boxY + 73, { align: 'center', width }
+  );
+
+  // 하단 날짜
+  doc.font(koreanFont).fontSize(8).fillColor('#475569');
+  doc.text(`분석일: ${new Date().toLocaleDateString('ko-KR')}`, 0, height - 80, { align: 'center', width });
+}
+
+// ─── 인사말 페이지 ───
+
+function renderGreetingPage(
+  doc: PDFKit.PDFDocument,
+  customerName: string,
+  greeting: string,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 60;
+
+  // 타이틀
+  doc.font(koreanBoldFont).fontSize(24).fillColor('#d4af37');
+  doc.text(`${customerName}님께`, 0, 120, { align: 'center', width });
+
+  // 장식선
+  doc.rect(width / 2 - 20, 155, 40, 2).fill('#d4af37');
+
+  // 인사말 본문
+  doc.font(koreanFont).fontSize(12).fillColor('#374151');
+  doc.text(greeting, margin, 190, {
+    width: width - margin * 2,
+    align: 'justify',
+    lineGap: 8,
+  });
+
+  // 서명
+  const bottomY = doc.y + 40;
+  doc.font(koreanFont).fontSize(11).fillColor('#6b7280');
+  doc.text('운명길잡이 드림', 0, Math.min(bottomY, 650), { align: 'right', width: width - margin });
+}
+
+// ─── 내러티브 목차 ───
+
+function renderNarrativeTableOfContents(
+  doc: PDFKit.PDFDocument,
+  chapters: { number: string; title: string }[],
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const leftX = 50;
+
+  // CONTENTS 헤더
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text('CONTENTS', leftX, 80);
+
+  doc.font(koreanBoldFont).fontSize(28).fillColor('#1f2937');
+  doc.text('목차', leftX, 100);
+
+  // 장식선
+  doc.rect(leftX, 140, 40, 3).fill('#1f2937');
+  doc.moveTo(leftX, 152).lineTo(width - 50, 152).strokeColor('#e5e7eb').lineWidth(1).stroke();
+
+  let y = 175;
+  for (const ch of chapters) {
+    if (y > 700) {
+      doc.addPage();
+      y = 80;
+    }
+
+    doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
+    doc.text(`${ch.number}  ${ch.title}`, leftX, y);
+
+    // 점선
+    y += 25;
+    doc.moveTo(leftX, y).lineTo(width - 50, y).strokeColor('#e5e7eb').lineWidth(0.5).stroke();
+    y += 18;
+  }
+}
+
+// ─── 챕터 내러티브 렌더링 (핵심!) ───
+
+function renderNarrativeChapter(
+  doc: PDFKit.PDFDocument,
+  chapter: { number: string; title: string; content: string },
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 50;
+  const contentWidth = width - margin * 2;
+
+  // 헤더 배경 바
+  doc.rect(0, 40, width, 1).fill('#1f2937');
+
+  // 챕터 번호
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text(`CHAPTER ${chapter.number}`, 0, 60, { align: 'center', width });
+
+  // 챕터 타이틀
+  doc.font(koreanBoldFont).fontSize(22).fillColor('#1f2937');
+  doc.text(chapter.title, 0, 82, { align: 'center', width });
+
+  // ENGLISH subtitle
+  doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
+  doc.text(chapterTitleToEnglish(chapter.title), 0, 112, { align: 'center', width });
+
+  // 구분선
+  doc.moveTo(margin, 135).lineTo(width - margin, 135).strokeColor('#e5e7eb').lineWidth(1).stroke();
+
+  // 본문 텍스트 - 긴 텍스트를 여러 페이지에 걸쳐 렌더링
+  let y = 155;
+  const paragraphs = chapter.content.split('\n').filter(p => p.trim());
+
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) continue;
+
+    // 소제목 감지 (대괄호로 시작하는 경우)
+    const isSubheading = trimmed.startsWith('[') && trimmed.endsWith(']');
+    const isBoldLine = trimmed.startsWith('■') || trimmed.startsWith('●') || trimmed.startsWith('▶');
+
+    if (isSubheading) {
+      // 소제목 앞 여백
+      y += 12;
+      if (y > 700) { doc.addPage(); y = 60; }
+
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#2563eb');
+      const subTitle = trimmed.replace(/[\[\]]/g, '');
+      const h = doc.heightOfString(subTitle, { width: contentWidth });
+      doc.text(subTitle, margin, y, { width: contentWidth });
+      y += h + 10;
+    } else if (isBoldLine) {
+      if (y > 720) { doc.addPage(); y = 60; }
+      doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
+      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 6 });
+      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 6 });
+      y += h + 6;
+    } else {
+      // 일반 본문
+      if (y > 720) { doc.addPage(); y = 60; }
+
+      doc.font(koreanFont).fontSize(11).fillColor('#374151');
+      // 긴 문단은 분할 렌더링
+      const textHeight = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 6 });
+
+      if (y + textHeight > 740) {
+        // 페이지를 넘어가는 경우: PDFKit이 자동으로 처리하도록 함
+        // 하지만 수동으로 페이지 관리
+        const availableHeight = 740 - y;
+        const linesPerPage = Math.floor(availableHeight / 18); // ~18pt per line
+        const words = trimmed.split('.');
+        let currentText = '';
+
+        for (const sentence of words) {
+          const test = currentText + sentence + '.';
+          const testH = doc.heightOfString(test, { width: contentWidth, lineGap: 6 });
+
+          if (y + testH > 740 && currentText) {
+            doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap: 6, align: 'justify' });
+            doc.addPage();
+            y = 60;
+            currentText = sentence + '.';
+          } else {
+            currentText = test;
+          }
+        }
+
+        if (currentText.trim() && currentText.trim() !== '.') {
+          const h = doc.heightOfString(currentText.trim(), { width: contentWidth, lineGap: 6 });
+          doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap: 6, align: 'justify' });
+          y += h + 8;
+        }
+      } else {
+        doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 6, align: 'justify' });
+        y += textHeight + 8;
+      }
+    }
+  }
+}
+
+function chapterTitleToEnglish(title: string): string {
+  const map: Record<string, string> = {
+    '종합 운세 분석': 'FORTUNE ANALYSIS',
+    '나의 사주팔자 상세분석': 'DETAILED FOUR PILLARS ANALYSIS',
+    '내 인생의 황금기': 'GOLDEN ERA OF YOUR LIFE',
+    '연애운과 배우자운': 'LOVE & MARRIAGE FORTUNE',
+    '나의 재물운 분석': 'WEALTH ANALYSIS',
+    '직업과 성공의 운명': 'CAREER & SUCCESS DESTINY',
+    '사주로 보는 건강과 체질': 'HEALTH & CONSTITUTION',
+    '당신을 도와줄 운명의 귀인': 'YOUR DESTINED BENEFACTOR',
+    '운명을 바꾸는 방법': 'HOW TO CHANGE YOUR DESTINY',
+    '월별 상세 운세': 'MONTHLY FORTUNE ANALYSIS',
+    '월별 운세 상세 분석': 'MONTHLY FORTUNE ANALYSIS',
+    '앞으로의 10년간 운명 분석': 'NEXT 10 YEARS DESTINY',
+    '나의 사주 한눈에 보기': 'YOUR FOUR PILLARS AT A GLANCE',
+    '운세 총평': 'OVERALL FORTUNE',
+    '재물운': 'WEALTH FORTUNE',
+    '직업/사업운': 'CAREER FORTUNE',
+    '연애/가정운': 'LOVE & FAMILY FORTUNE',
+    '건강운': 'HEALTH FORTUNE',
+    '인간관계/귀인': 'RELATIONSHIPS & BENEFACTORS',
+    '주의할 시기와 대비법': 'CAUTION PERIODS & PREPARATION',
+    '행운 가이드': 'LUCKY GUIDE',
+  };
+
+  for (const [ko, en] of Object.entries(map)) {
+    if (title.includes(ko)) return en;
+  }
+  return 'ANALYSIS';
+}
+
+// ─────────────────────────────────────────────
+//  기존 PRODUCT-SPECIFIC PDF GENERATORS (fallback)
 // ─────────────────────────────────────────────
 
 function generateBasicPdf(

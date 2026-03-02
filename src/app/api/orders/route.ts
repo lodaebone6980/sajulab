@@ -12,6 +12,7 @@ import {
 } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { generateSajuPdf } from '@/lib/pdf/generator';
+import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
 import path from 'path';
 import fs from 'fs';
 
@@ -220,10 +221,19 @@ export async function POST(request: NextRequest) {
       if (product.code !== 'saju-data') {
         updateOrderStatus(orderId, userId, 'pdf_generating');
 
+        // LLM 내러티브 생성 시도 (OpenAI API 키가 있으면)
+        let narrative = await generateNarrative(sajuResult, customerName, product.code);
+
+        // API 키 없으면 fallback 내러티브 사용
+        if (!narrative) {
+          narrative = generateFallbackNarrative(sajuResult, customerName, product.code);
+        }
+
         const pdfBuffer = await generateSajuPdf(sajuResult, {
           customerName,
           productName: product.name,
           productCode: product.code,
+          narrative,
         });
 
         // Save PDF to file

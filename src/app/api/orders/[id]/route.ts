@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/auth/middleware';
 import { getOrderById, updateOrderStatus, updateOrderResult, updateCustomer, getDb } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { generateSajuPdf } from '@/lib/pdf/generator';
+import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
 import path from 'path';
 import fs from 'fs';
 
@@ -134,10 +135,17 @@ async function runReanalysis(orderId: number, userId: number) {
     if (order.product_code !== 'saju-data') {
       updateOrderStatus(orderId, userId, 'pdf_generating');
 
+      // LLM 내러티브 생성
+      let narrative = await generateNarrative(sajuResult, order.customer_name, order.product_code);
+      if (!narrative) {
+        narrative = generateFallbackNarrative(sajuResult, order.customer_name, order.product_code);
+      }
+
       const pdfBuffer = await generateSajuPdf(sajuResult, {
         customerName: order.customer_name,
         productName: order.product_name,
         productCode: order.product_code,
+        narrative,
       });
 
       const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
