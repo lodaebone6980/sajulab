@@ -8,21 +8,21 @@ interface DashboardStats {
   points: number;
   todayCompleted: number;
   processing: number;
-  totalTasks: number;
+  totalOrders: number;
   statusCounts: {
     pending: number;
-    waiting: number;
+    requested: number;
     processing: number;
     completed: number;
     failed: number;
   };
-  recentTasks: Array<{
+  recentOrders: Array<{
     id: number;
-    customer_name: string;
-    product_name: string;
-    product_code: string;
+    customerName: string;
+    product: string;
     status: string;
-    created_at: string;
+    statusKey: string;
+    createdAt: string;
   }>;
 }
 
@@ -169,7 +169,7 @@ export default function DashboardPage() {
                 <div>
                   <p className="text-xs text-gray-500 mb-1">전체 작업</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {stats ? `${stats.totalTasks}건` : '-'}
+                    {stats ? `${stats.totalOrders}건` : '-'}
                   </p>
                 </div>
                 <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
@@ -192,7 +192,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="bg-blue-50 p-4 text-center border-r border-blue-100">
                   <p className="text-xs text-blue-500 mb-1">대기중</p>
-                  <p className="text-xl font-bold text-blue-600">{stats?.statusCounts?.waiting || 0}</p>
+                  <p className="text-xl font-bold text-blue-600">{stats?.statusCounts?.requested || 0}</p>
                 </div>
                 <div className="bg-yellow-50 p-4 text-center border-r border-yellow-100">
                   <p className="text-xs text-yellow-600 mb-1">처리중</p>
@@ -226,13 +226,13 @@ export default function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {stats?.recentTasks?.length ? (
-                    stats.recentTasks.map((task) => (
-                      <tr key={task.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                        <td className="px-5 py-3 text-sm text-gray-900">{task.customer_name}</td>
-                        <td className="px-5 py-3 text-sm text-gray-600">{task.product_code || task.product_name}</td>
-                        <td className="px-5 py-3">{getStatusBadge(task.status)}</td>
-                        <td className="px-5 py-3 text-sm text-gray-500">{formatDate(task.created_at)}</td>
+                  {stats?.recentOrders?.length ? (
+                    stats.recentOrders.map((order) => (
+                      <tr key={order.id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                        <td className="px-5 py-3 text-sm text-gray-900">{order.customerName}</td>
+                        <td className="px-5 py-3 text-sm text-gray-600">{order.product}</td>
+                        <td className="px-5 py-3">{getStatusBadge(order.statusKey)}</td>
+                        <td className="px-5 py-3 text-sm text-gray-500">{order.createdAt}</td>
                       </tr>
                     ))
                   ) : (
