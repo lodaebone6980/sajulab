@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import type { SajuResult } from '@/lib/saju/types';
 import type { NarrativeResult } from '@/lib/ai';
+import { generateSajuPdfFromHtml } from './html-to-pdf';
 
 const FONTS_DIR = path.join(process.cwd(), 'fonts');
 const FONT_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
@@ -24,6 +25,24 @@ interface PdfOptions {
 }
 
 export async function generateSajuPdf(
+  result: SajuResult,
+  options: PdfOptions
+): Promise<Buffer> {
+  // Puppeteer(HTML→PDF) 우선 시도, 실패 시 PDFKit 폴백
+  try {
+    console.log('[PDF] Puppeteer HTML→PDF 생성 시도...');
+    const buffer = await generateSajuPdfFromHtml(result, options);
+    console.log('[PDF] Puppeteer 성공:', buffer.length, 'bytes');
+    return buffer;
+  } catch (err) {
+    console.warn('[PDF] Puppeteer 실패, PDFKit 폴백:', err instanceof Error ? err.message : err);
+  }
+
+  // ── PDFKit 폴백 ──
+  return generatePdfKitFallback(result, options);
+}
+
+function generatePdfKitFallback(
   result: SajuResult,
   options: PdfOptions
 ): Promise<Buffer> {
