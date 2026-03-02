@@ -1,8 +1,15 @@
 # ── Stage 1: Dependencies ──
 FROM node:20-slim AS deps
 WORKDIR /app
+
+# better-sqlite3 네이티브 빌드에 필요한 도구
+RUN apt-get update && apt-get install -y \
+  python3 make g++ \
+  --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/*
+
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm ci
 
 # ── Stage 2: Build ──
 FROM node:20-slim AS builder
@@ -15,7 +22,7 @@ RUN npm run build
 FROM node:20-slim AS runner
 WORKDIR /app
 
-# Chromium 의존성 설치 (Puppeteer용)
+# Chromium + 한글 폰트 설치 (Puppeteer용)
 RUN apt-get update && apt-get install -y \
   chromium \
   fonts-noto-cjk \
@@ -34,7 +41,7 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 # public 폴더 복사
 COPY --from=builder /app/public ./public
-# 폰트 복사
+# 폰트 복사 (PDFKit 폴백용)
 COPY --from=builder /app/fonts ./fonts
 
 # 데이터 디렉토리 생성
