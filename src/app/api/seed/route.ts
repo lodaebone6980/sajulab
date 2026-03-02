@@ -14,7 +14,7 @@ import fs from 'fs';
 export async function POST(request: NextRequest) {
   try {
     // Get the first user (admin or test user)
-    const adminUser = findUserByEmail('admin');
+    const adminUser = findUserByEmail('admin@sajulab.kr');
     if (!adminUser) {
       return NextResponse.json(
         { error: '관리자 사용자를 찾을 수 없습니다.' },
