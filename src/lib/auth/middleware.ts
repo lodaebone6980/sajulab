@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from './index';
 
 export function getAuthUserId(request: NextRequest): number | null {
-  const token = request.cookies.get('token')?.value;
+  const token = request.cookies.get('auth_token')?.value;
   if (!token) return null;
   const decoded = verifyToken(token);
   return decoded?.userId ?? null;
