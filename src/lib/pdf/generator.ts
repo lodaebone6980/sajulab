@@ -13,9 +13,9 @@ const FONT_BOLD = path.join(FONTS_DIR, 'NotoSansKR-Bold.ttf');
 const FONT_NANUM_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
 const FONT_NANUM_BOLD = path.join(FONTS_DIR, 'NanumGothic-Bold.ttf');
 
-// 오행 색상
+// 오행 색상 (sajulab.kr 참고 - 따뜻하고 차분한 머티드 톤)
 const ELEMENT_COLORS: Record<string, string> = {
-  '목': '#22c55e', '화': '#ef4444', '토': '#d97706', '금': '#6b7280', '수': '#3b82f6',
+  '목': '#5a7a6b', '화': '#c47d5e', '토': '#c4a055', '금': '#8c8c8c', '수': '#5c7d8e',
 };
 const ELEMENT_HANJA: Record<string, string> = {
   '목': '木', '화': '火', '토': '土', '금': '金', '수': '水',
@@ -311,9 +311,7 @@ function renderNarrativeCoverPage(
     0, boxY + 73, { align: 'center', width }
   );
 
-  // 하단 날짜
-  doc.font(koreanFont).fontSize(8).fillColor('#475569');
-  doc.text(`분석일: ${new Date().toLocaleDateString('ko-KR')}`, 0, height - 80, { align: 'center', width });
+  // 하단 날짜 제거됨
 }
 
 // ─── 인사말 페이지 ───
@@ -435,7 +433,7 @@ function renderNarrativeChapter(
       y += 12;
       if (y > 700) { doc.addPage(); y = 60; }
 
-      doc.font(koreanBoldFont).fontSize(14).fillColor('#2563eb');
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#6b3a3a');
       const subTitle = trimmed.replace(/[\[\]]/g, '');
       const h = doc.heightOfString(subTitle, { width: contentWidth });
       doc.text(subTitle, margin, y, { width: contentWidth });
@@ -642,7 +640,7 @@ function renderNarrativeChapterLarge(
     if (isSubheading) {
       y += 24;
       if (y > pageBottom) { doc.addPage(); y = 70; }
-      doc.font(koreanBoldFont).fontSize(18).fillColor('#2563eb');
+      doc.font(koreanBoldFont).fontSize(18).fillColor('#6b3a3a');
       const subTitle = trimmed.replace(/[\[\]]/g, '');
       const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 12 });
       doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 12 });
@@ -651,8 +649,8 @@ function renderNarrativeChapterLarge(
       y += 20;
       if (y > pageBottom) { doc.addPage(); y = 70; }
       // 월별 헤더 강조
-      doc.roundedRect(margin - 5, y - 5, contentWidth + 10, 34, 4).fill('#f0f4ff');
-      doc.font(koreanBoldFont).fontSize(16).fillColor('#1e40af');
+      doc.roundedRect(margin - 5, y - 5, contentWidth + 10, 34, 4).fill('#f5f0eb');
+      doc.font(koreanBoldFont).fontSize(16).fillColor('#5c3a2e');
       doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 4, { width: contentWidth });
       y += 42;
       // 월별 본문
@@ -732,11 +730,11 @@ function renderFortuneScoreChart(
   // 5대 운세 점수 (사주 데이터 기반으로 점수 산출)
   const scores = calculateFortuneScores(result);
   const categories = [
-    { label: '재물운', score: scores.wealth, color: '#f59e0b' },
-    { label: '직업운', score: scores.career, color: '#3b82f6' },
-    { label: '연애운', score: scores.love, color: '#ec4899' },
-    { label: '건강운', score: scores.health, color: '#22c55e' },
-    { label: '대인운', score: scores.social, color: '#8b5cf6' },
+    { label: '재물운', score: scores.wealth, color: '#c4a055' },
+    { label: '직업운', score: scores.career, color: '#c47d5e' },
+    { label: '연애운', score: scores.love, color: '#a85d45' },
+    { label: '건강운', score: scores.health, color: '#5a7a6b' },
+    { label: '대인운', score: scores.social, color: '#7a6855' },
   ];
 
   let y = 120;
@@ -773,8 +771,8 @@ function renderFortuneScoreChart(
 
   // 큰 원형 점수
   const cx = width / 2;
-  doc.circle(cx, y + 40, 45).fill('#f0f4ff');
-  doc.circle(cx, y + 40, 40).fill('#2563eb');
+  doc.circle(cx, y + 40, 45).fill('#f5f0eb');
+  doc.circle(cx, y + 40, 40).fill('#6b3a3a');
   doc.font(koreanBoldFont).fontSize(28).fillColor('#ffffff');
   doc.text(`${totalScore}`, cx - 25, y + 24, { width: 50, align: 'center' });
 
@@ -804,16 +802,16 @@ function renderTenGodDistribution(
   drawSectionHeader(doc, '십신(十神) 분포', koreanBoldFont);
 
   const tenGodList = [
-    { name: '비견(比肩)', icon: '比', desc: '동료, 경쟁, 자존심', color: '#22c55e' },
-    { name: '겁재(劫財)', icon: '劫', desc: '도전, 추진력, 경쟁심', color: '#16a34a' },
-    { name: '식신(食神)', icon: '食', desc: '재능, 표현, 예술', color: '#ef4444' },
-    { name: '상관(傷官)', icon: '傷', desc: '창의, 반항, 자유', color: '#dc2626' },
-    { name: '편재(偏財)', icon: '偏', desc: '투기, 횡재, 사교', color: '#d97706' },
-    { name: '정재(正財)', icon: '正', desc: '안정, 저축, 성실', color: '#b45309' },
-    { name: '편관(偏官)', icon: '官', desc: '권위, 직업, 리더십', color: '#6b7280' },
-    { name: '정관(正官)', icon: '正', desc: '명예, 법률, 규범', color: '#4b5563' },
-    { name: '편인(偏印)', icon: '印', desc: '학문, 종교, 탐구', color: '#3b82f6' },
-    { name: '정인(正印)', icon: '印', desc: '교육, 어머니, 보호', color: '#2563eb' },
+    { name: '비견(比肩)', icon: '比', desc: '동료, 경쟁, 자존심', color: '#5a7a6b' },
+    { name: '겁재(劫財)', icon: '劫', desc: '도전, 추진력, 경쟁심', color: '#4d6b5a' },
+    { name: '식신(食神)', icon: '食', desc: '재능, 표현, 예술', color: '#c47d5e' },
+    { name: '상관(傷官)', icon: '傷', desc: '창의, 반항, 자유', color: '#a85d45' },
+    { name: '편재(偏財)', icon: '偏', desc: '투기, 횡재, 사교', color: '#c4a055' },
+    { name: '정재(正財)', icon: '正', desc: '안정, 저축, 성실', color: '#a08840' },
+    { name: '편관(偏官)', icon: '官', desc: '권위, 직업, 리더십', color: '#7a6855' },
+    { name: '정관(正官)', icon: '正', desc: '명예, 법률, 규범', color: '#5c4e42' },
+    { name: '편인(偏印)', icon: '印', desc: '학문, 종교, 탐구', color: '#5c7d8e' },
+    { name: '정인(正印)', icon: '印', desc: '교육, 어머니, 보호', color: '#4a6b7a' },
   ];
 
   // 십성 배치
@@ -915,7 +913,7 @@ function renderAnalysisGuidePage(
     if (y > 580) { doc.addPage(); y = 80; }
 
     // 제목
-    doc.font(koreanBoldFont).fontSize(16).fillColor('#1e40af');
+    doc.font(koreanBoldFont).fontSize(16).fillColor('#5c3a2e');
     doc.text(item.title, margin, y);
     y += 28;
 
@@ -955,7 +953,7 @@ function renderFourPillarsExplanation(
   const dayElement = fourPillars.day.elementKo;
   const dayStem = fourPillars.day.heavenlyStemKo;
 
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#1e40af');
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#5c3a2e');
   doc.text(`일간: ${dayStem} (${dayElement}의 기운)`, margin, y);
   y += 35;
 
@@ -967,7 +965,7 @@ function renderFourPillarsExplanation(
 
   // 용신 해설
   if (y > 500) { doc.addPage(); y = 80; }
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#1e40af');
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#5c3a2e');
   doc.text(`용신: ${yongSin}`, margin, y);
   y += 35;
 
@@ -979,7 +977,7 @@ function renderFourPillarsExplanation(
 
   // 오행 분포 해설
   if (y > 500) { doc.addPage(); y = 80; }
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#1e40af');
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#5c3a2e');
   doc.text('오행 분포 분석', margin, y);
   y += 35;
 
@@ -1025,19 +1023,19 @@ function renderFortuneScoreExplanation(
   let y = 165;
 
   const details = [
-    { label: '재물운', score: scores.wealth, color: '#f59e0b',
+    { label: '재물운', score: scores.wealth, color: '#c4a055',
       high: '올해 재물 운이 좋은 편입니다. 투자나 재테크에 좋은 기회가 올 수 있으며, 안정적인 수입이 기대됩니다. 다만 과도한 지출은 삼가고, 계획적인 자산 관리를 하시는 것이 좋겠습니다.',
       low: '올해 재물 운에 다소 주의가 필요합니다. 큰 투자나 보증은 피하시고, 안정적인 저축 위주의 재정 관리를 추천드립니다. 용신의 기운을 활용하면 재물 운을 보강할 수 있습니다.' },
-    { label: '직업운', score: scores.career, color: '#3b82f6',
+    { label: '직업운', score: scores.career, color: '#c47d5e',
       high: '직장이나 사업에서 좋은 성과를 기대할 수 있는 해입니다. 승진이나 이직의 기회가 올 수 있으며, 새로운 프로젝트에서 두각을 나타낼 수 있습니다.',
       low: '직업적으로 안정을 유지하는 것이 중요한 해입니다. 무리한 이직이나 사업 확장보다는 현재 위치에서 실력을 쌓는 데 집중하시기 바랍니다.' },
-    { label: '연애운', score: scores.love, color: '#ec4899',
+    { label: '연애운', score: scores.love, color: '#a85d45',
       high: '인연의 기운이 좋은 해입니다. 미혼이라면 좋은 만남이 기대되고, 기혼이라면 부부 관계가 더욱 돈독해질 수 있습니다.',
       low: '감정적인 갈등에 주의가 필요한 해입니다. 소통을 통해 오해를 풀고, 상대방을 이해하려는 노력이 필요합니다.' },
-    { label: '건강운', score: scores.health, color: '#22c55e',
+    { label: '건강운', score: scores.health, color: '#5a7a6b',
       high: '건강 상태가 비교적 양호한 해입니다. 규칙적인 운동과 균형 잡힌 식단을 유지하면 더욱 건강한 한 해를 보낼 수 있습니다.',
       low: '건강 관리에 특별히 신경을 써야 하는 해입니다. 과로를 피하고 충분한 휴식을 취하시기 바랍니다. 정기 검진도 추천드립니다.' },
-    { label: '대인운', score: scores.social, color: '#8b5cf6',
+    { label: '대인운', score: scores.social, color: '#7a6855',
       high: '대인관계가 원활한 해입니다. 귀인의 도움을 받을 수 있으며, 새로운 인맥이 좋은 기회를 가져다줄 수 있습니다.',
       low: '대인관계에서 신중함이 필요한 해입니다. 가까운 사람과의 갈등을 조심하고, 새로운 관계에서는 신뢰를 먼저 쌓으시기 바랍니다.' },
   ];
@@ -1097,7 +1095,7 @@ function renderGlossaryPage(
   for (const item of glossary) {
     if (y > 560) { doc.addPage(); y = 80; }
 
-    doc.font(koreanBoldFont).fontSize(15).fillColor('#1e40af');
+    doc.font(koreanBoldFont).fontSize(15).fillColor('#5c3a2e');
     doc.text(item.term, margin, y);
     y += 26;
 
@@ -1302,8 +1300,6 @@ function renderCoverPage(doc: PDFKit.PDFDocument, result: SajuResult, options: P
   doc.text(options.productName, 0, boxY + 126, { align: 'center', width });
 
   // Bottom
-  doc.font(koreanFont).fontSize(8).fillColor('#475569');
-  doc.text(`분석일: ${new Date().toLocaleDateString('ko-KR')}`, 0, height - 100, { align: 'center', width });
 
   // PREMIUM badge
   doc.font(koreanBoldFont).fontSize(7).fillColor('#0f172a');
@@ -1340,7 +1336,7 @@ function renderTableOfContents(doc: PDFKit.PDFDocument, result: SajuResult, opti
   for (const item of tocItems) {
     // Number circle
     doc.circle(leftX + 16, y + 10, 14).fill('#f1f5f9');
-    doc.font(koreanBoldFont).fontSize(10).fillColor('#2563eb');
+    doc.font(koreanBoldFont).fontSize(10).fillColor('#6b3a3a');
     doc.text(item.num, leftX + 4, y + 5, { width: 24, align: 'center' });
 
     // Title
@@ -1395,7 +1391,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     doc.text(p.label, x, y + 10, { width: cardW, align: 'center' });
 
     // Ten god
-    doc.font(koreanBoldFont).fontSize(9).fillColor('#2563eb');
+    doc.font(koreanBoldFont).fontSize(9).fillColor('#6b3a3a');
     doc.text(p.tenGod, x, y + 26, { width: cardW, align: 'center' });
 
     // Heavenly stem (hanja)
@@ -1457,11 +1453,11 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   drawSectionHeader(doc, '음양오행 분포 (五行)', koreanBoldFont);
 
   const elements = [
-    { label: '목', hanja: '木', value: elementDistribution.wood, color: '#22c55e' },
-    { label: '화', hanja: '火', value: elementDistribution.fire, color: '#ef4444' },
-    { label: '토', hanja: '土', value: elementDistribution.earth, color: '#d97706' },
-    { label: '금', hanja: '金', value: elementDistribution.metal, color: '#6b7280' },
-    { label: '수', hanja: '水', value: elementDistribution.water, color: '#3b82f6' },
+    { label: '목', hanja: '木', value: elementDistribution.wood, color: '#5a7a6b' },
+    { label: '화', hanja: '火', value: elementDistribution.fire, color: '#c47d5e' },
+    { label: '토', hanja: '土', value: elementDistribution.earth, color: '#c4a055' },
+    { label: '금', hanja: '金', value: elementDistribution.metal, color: '#8c8c8c' },
+    { label: '수', hanja: '水', value: elementDistribution.water, color: '#5c7d8e' },
   ];
 
   const maxVal = Math.max(...elements.map(e => e.value), 1);
@@ -1540,7 +1536,7 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   // Lucky direction
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text('행운의 방향', 50 + thirdW * 2, y + 12, { width: thirdW, align: 'center' });
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#2563eb');
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#6b3a3a');
   doc.text(fortune.luckyDirection, 50 + thirdW * 2, y + 36, { width: thirdW, align: 'center' });
 }
 
@@ -1572,7 +1568,7 @@ function renderFortuneSectionPage(doc: PDFKit.PDFDocument, icon: string, title: 
 
   // Category badge
   doc.roundedRect(width / 2 - 36, 110, 72, 22, 11).fill('#eff6ff');
-  doc.font(koreanBoldFont).fontSize(9).fillColor('#2563eb');
+  doc.font(koreanBoldFont).fontSize(9).fillColor('#6b3a3a');
   doc.text(icon, width / 2 - 36, 115, { width: 72, align: 'center' });
 
   // Content
@@ -1695,7 +1691,7 @@ function renderExternalSection(
       y = 80;
     }
 
-    doc.font(koreanBoldFont).fontSize(10).fillColor('#2563eb');
+    doc.font(koreanBoldFont).fontSize(10).fillColor('#6b3a3a');
     doc.text(`▸ ${item.title}`, 60, y);
     y += 18;
 
@@ -1734,7 +1730,6 @@ function renderOutroPage(doc: PDFKit.PDFDocument, options: PdfOptions, koreanFon
 
   doc.font(koreanFont).fontSize(8).fillColor('#9ca3af');
   doc.text('* 본 분석은 참고용이며, 의학적/법률적/재정적 조언을 대체하지 않습니다.', 0, height - 80, { align: 'center', width });
-  doc.text(`발행일: ${new Date().toLocaleDateString('ko-KR')}`, 0, height - 65, { align: 'center', width });
 }
 
 // ─────────────────────────────────────────────
@@ -1754,7 +1749,7 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
     doc.text('강약 판정 (强弱)', 60, y);
     y += 24;
 
-    const resultColor = s.result === '신강' ? '#ef4444' : s.result === '신약' ? '#3b82f6' : '#d97706';
+    const resultColor = s.result === '신강' ? '#c47d5e' : s.result === '신약' ? '#5c7d8e' : '#c4a055';
     doc.roundedRect(60, y, width - 120, 60, 8).fill('#f8fafc');
     doc.font(koreanBoldFont).fontSize(22).fillColor(resultColor);
     doc.text(s.result, 60, y + 8, { width: 120, align: 'center' });
@@ -1772,7 +1767,7 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
       const cx = 180 + i * thirdW + thirdW / 2;
       doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
       doc.text(criteria[i].label, cx - 30, y + 10, { width: 60, align: 'center' });
-      doc.font(koreanBoldFont).fontSize(14).fillColor(criteria[i].gained ? '#22c55e' : '#ef4444');
+      doc.font(koreanBoldFont).fontSize(14).fillColor(criteria[i].gained ? '#5a7a6b' : '#c47d5e');
       doc.text(`${criteria[i].gained ? 'O' : 'X'} (${criteria[i].score})`, cx - 30, y + 28, { width: 60, align: 'center' });
     }
     y += 80;
@@ -1826,7 +1821,7 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
       doc.roundedRect(cx + 2, y, cellW - 4, 40, 6).fill('#f8fafc');
       doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
       doc.text(positions[i].label, cx + 2, y + 6, { width: cellW - 4, align: 'center' });
-      doc.font(koreanBoldFont).fontSize(14).fillColor('#2563eb');
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#6b3a3a');
       doc.text(ts.bong[positions[i].key], cx + 2, y + 20, { width: cellW - 4, align: 'center' });
     }
     y += 56;
@@ -1842,7 +1837,7 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
 
     for (const s of result.sinsal.slice(0, 8)) {
       if (y > 740) { doc.addPage(); y = 80; }
-      const catColor = s.category === '귀인' ? '#d97706' : s.category === '길신' ? '#22c55e' : s.category === '흉살' ? '#ef4444' : '#6b7280';
+      const catColor = s.category === '귀인' ? '#c4a055' : s.category === '길신' ? '#5a7a6b' : s.category === '흉살' ? '#c47d5e' : '#6b7280';
       doc.roundedRect(60, y, 44, 16, 8).fill(catColor + '20');
       doc.font(koreanBoldFont).fontSize(7).fillColor(catColor);
       doc.text(s.category, 60, y + 4, { width: 44, align: 'center' });
@@ -1864,8 +1859,8 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
 
     for (const it of result.interactions.slice(0, 6)) {
       if (y > 740) { doc.addPage(); y = 80; }
-      const typeColor = ['천간합', '육합', '삼합', '방합'].includes(it.type) ? '#22c55e' :
-                         ['천간충', '육충'].includes(it.type) ? '#ef4444' : '#d97706';
+      const typeColor = ['천간합', '육합', '삼합', '방합'].includes(it.type) ? '#5a7a6b' :
+                         ['천간충', '육충'].includes(it.type) ? '#c47d5e' : '#c4a055';
       doc.roundedRect(60, y, 44, 16, 8).fill(typeColor + '20');
       doc.font(koreanBoldFont).fontSize(7).fillColor(typeColor);
       doc.text(it.type, 60, y + 4, { width: 44, align: 'center' });
@@ -1908,16 +1903,16 @@ function renderYearMonthFortune(doc: PDFKit.PDFDocument, result: SajuResult, kor
     // Ten god + Twelve stage
     doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
     doc.text('십성', 200, y + 10);
-    doc.font(koreanBoldFont).fontSize(14).fillColor('#2563eb');
+    doc.font(koreanBoldFont).fontSize(14).fillColor('#6b3a3a');
     doc.text(yf.tenGod, 200, y + 26);
 
     doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
     doc.text('운성', 300, y + 10);
-    doc.font(koreanBoldFont).fontSize(14).fillColor('#2563eb');
+    doc.font(koreanBoldFont).fontSize(14).fillColor('#6b3a3a');
     doc.text(yf.twelveStage, 300, y + 26);
 
     // Rating
-    const ratingColor = yf.favorableRating >= 10 ? '#22c55e' : yf.favorableRating <= -10 ? '#ef4444' : '#d97706';
+    const ratingColor = yf.favorableRating >= 10 ? '#5a7a6b' : yf.favorableRating <= -10 ? '#c47d5e' : '#c4a055';
     doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
     doc.text('길흉', 400, y + 10);
     doc.font(koreanBoldFont).fontSize(18).fillColor(ratingColor);
@@ -1955,7 +1950,7 @@ function renderYearMonthFortune(doc: PDFKit.PDFDocument, result: SajuResult, kor
         doc.text(`${mf.stemKo}${mf.branchKo}`, cx + 2, y + 16, { width: cellW - 4, align: 'center' });
         doc.font(koreanFont).fontSize(7).fillColor('#6b7280');
         doc.text(mf.tenGod, cx + 2, y + 32, { width: cellW - 4, align: 'center' });
-        doc.font(koreanFont).fontSize(7).fillColor('#2563eb');
+        doc.font(koreanFont).fontSize(7).fillColor('#6b3a3a');
         doc.text(mf.twelveStage, cx + 2, y + 44, { width: cellW - 4, align: 'center' });
       }
       y += cellH + 8;
@@ -2014,7 +2009,7 @@ function renderMonthFortunePage(doc: PDFKit.PDFDocument, result: SajuResult, kor
         doc.text(`${mf.stemKo}${mf.branchKo}`, cx + 2, y + 16, { width: cellW - 4, align: 'center' });
         doc.font(koreanFont).fontSize(7).fillColor('#6b7280');
         doc.text(mf.tenGod, cx + 2, y + 32, { width: cellW - 4, align: 'center' });
-        doc.font(koreanFont).fontSize(7).fillColor('#2563eb');
+        doc.font(koreanFont).fontSize(7).fillColor('#6b3a3a');
         doc.text(mf.twelveStage, cx + 2, y + 44, { width: cellW - 4, align: 'center' });
       }
       y += cellH + 8;
@@ -2087,7 +2082,7 @@ function drawSectionHeader(doc: PDFKit.PDFDocument, title: string, koreanBoldFon
   const { width } = doc.page;
 
   // Top decorative line
-  doc.rect(50, 50, width - 100, 2).fill('#2563eb');
+  doc.rect(50, 50, width - 100, 2).fill('#6b3a3a');
 
   // Title
   doc.font(koreanBoldFont).fontSize(20).fillColor('#1f2937');
