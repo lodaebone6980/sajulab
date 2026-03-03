@@ -214,6 +214,12 @@ function generateNarrativePdf(
     renderFortuneScoreExplanation(doc, result, options, koreanFont, koreanBoldFont);
   }
 
+  // 6.7 월별 운세 차트 (신년운세/프리미엄)
+  if ((isNewYear || isPremium) && result.monthFortunes && result.monthFortunes.length > 0) {
+    doc.addPage();
+    renderMonthFortunePage(doc, result, koreanFont, koreanBoldFont);
+  }
+
   // 7. 각 챕터별 내러티브 (챕터 타이틀 페이지 + 본문)
   for (const chapter of narrative.chapters) {
     // 챕터 타이틀 페이지 (어두운 배경)
