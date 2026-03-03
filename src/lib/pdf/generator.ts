@@ -6,8 +6,12 @@ import type { NarrativeResult } from '@/lib/ai';
 import { generateSajuPdfFromHtml } from './html-to-pdf';
 
 const FONTS_DIR = path.join(process.cwd(), 'fonts');
-const FONT_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
-const FONT_BOLD = path.join(FONTS_DIR, 'NanumGothic-Bold.ttf');
+// NotoSansKR: 한글 + 한자(CJK) + 라틴 모두 지원
+const FONT_REGULAR = path.join(FONTS_DIR, 'NotoSansKR-Regular.ttf');
+const FONT_BOLD = path.join(FONTS_DIR, 'NotoSansKR-Bold.ttf');
+// NanumGothic 폴백
+const FONT_NANUM_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
+const FONT_NANUM_BOLD = path.join(FONTS_DIR, 'NanumGothic-Bold.ttf');
 
 // 오행 색상
 const ELEMENT_COLORS: Record<string, string> = {
@@ -78,25 +82,47 @@ function generatePdfKitFallback(
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Check font file existence
-      const fontRegularExists = fs.existsSync(FONT_REGULAR);
-      const fontBoldExists = fs.existsSync(FONT_BOLD);
-
-      // Register fonts if available, otherwise use built-in Helvetica
+      // Check font file existence - prefer NotoSansKR (한글+한자), fallback to NanumGothic
       let koreanFont = 'Helvetica';
       let koreanBoldFont = 'Helvetica-Bold';
 
-      if (fontRegularExists && fontBoldExists) {
+      const notoRegularExists = fs.existsSync(FONT_REGULAR);
+      const notoBoldExists = fs.existsSync(FONT_BOLD);
+      const nanumRegularExists = fs.existsSync(FONT_NANUM_REGULAR);
+      const nanumBoldExists = fs.existsSync(FONT_NANUM_BOLD);
+
+      if (notoRegularExists && notoBoldExists) {
         try {
           doc.registerFont('Korean', FONT_REGULAR);
           doc.registerFont('KoreanBold', FONT_BOLD);
           koreanFont = 'Korean';
           koreanBoldFont = 'KoreanBold';
+          console.log('[PDF] NotoSansKR 폰트 등록 성공 (한글+한자 지원)');
         } catch (err) {
-          console.warn('Failed to register Korean fonts, falling back to Helvetica:', err);
+          console.warn('[PDF] NotoSansKR 등록 실패, NanumGothic 시도:', err);
+          if (nanumRegularExists && nanumBoldExists) {
+            try {
+              doc.registerFont('Korean', FONT_NANUM_REGULAR);
+              doc.registerFont('KoreanBold', FONT_NANUM_BOLD);
+              koreanFont = 'Korean';
+              koreanBoldFont = 'KoreanBold';
+            } catch (err2) {
+              console.warn('[PDF] NanumGothic도 실패, Helvetica 사용:', err2);
+            }
+          }
+        }
+      } else if (nanumRegularExists && nanumBoldExists) {
+        try {
+          doc.registerFont('Korean', FONT_NANUM_REGULAR);
+          doc.registerFont('KoreanBold', FONT_NANUM_BOLD);
+          koreanFont = 'Korean';
+          koreanBoldFont = 'KoreanBold';
+          console.log('[PDF] NanumGothic 폰트 등록 (한자 미지원)');
+        } catch (err) {
+          console.warn('[PDF] 폰트 등록 실패, Helvetica 사용:', err);
         }
       } else {
-        console.warn(`Font files missing: Regular=${fontRegularExists}, Bold=${fontBoldExists}. Using Helvetica.`);
+        console.warn(`[PDF] 폰트 파일 없음. Helvetica 사용.`);
       }
 
       // AI(GPT) 내러티브가 있으면 AI 기반 PDF, 없으면 sajulab.kr 동일 구조
@@ -775,19 +801,19 @@ function renderTenGodDistribution(
   const { width } = doc.page;
   const { tenGods } = result;
 
-  drawSectionHeader(doc, '십신 분포', koreanBoldFont);
+  drawSectionHeader(doc, '십신(十神) 분포', koreanBoldFont);
 
   const tenGodList = [
-    { name: '비견', icon: '비', desc: '동료, 경쟁, 자존심', color: '#22c55e' },
-    { name: '겁재', icon: '겁', desc: '도전, 추진력, 경쟁심', color: '#16a34a' },
-    { name: '식신', icon: '식', desc: '재능, 표현, 예술', color: '#ef4444' },
-    { name: '상관', icon: '상', desc: '창의, 반항, 자유', color: '#dc2626' },
-    { name: '편재', icon: '편', desc: '투기, 횡재, 사교', color: '#d97706' },
-    { name: '정재', icon: '정', desc: '안정, 저축, 성실', color: '#b45309' },
-    { name: '편관', icon: '관', desc: '권위, 직업, 리더십', color: '#6b7280' },
-    { name: '정관', icon: '관', desc: '명예, 법률, 규범', color: '#4b5563' },
-    { name: '편인', icon: '인', desc: '학문, 종교, 탐구', color: '#3b82f6' },
-    { name: '정인', icon: '인', desc: '교육, 어머니, 보호', color: '#2563eb' },
+    { name: '비견(比肩)', icon: '比', desc: '동료, 경쟁, 자존심', color: '#22c55e' },
+    { name: '겁재(劫財)', icon: '劫', desc: '도전, 추진력, 경쟁심', color: '#16a34a' },
+    { name: '식신(食神)', icon: '食', desc: '재능, 표현, 예술', color: '#ef4444' },
+    { name: '상관(傷官)', icon: '傷', desc: '창의, 반항, 자유', color: '#dc2626' },
+    { name: '편재(偏財)', icon: '偏', desc: '투기, 횡재, 사교', color: '#d97706' },
+    { name: '정재(正財)', icon: '正', desc: '안정, 저축, 성실', color: '#b45309' },
+    { name: '편관(偏官)', icon: '官', desc: '권위, 직업, 리더십', color: '#6b7280' },
+    { name: '정관(正官)', icon: '正', desc: '명예, 법률, 규범', color: '#4b5563' },
+    { name: '편인(偏印)', icon: '印', desc: '학문, 종교, 탐구', color: '#3b82f6' },
+    { name: '정인(正印)', icon: '印', desc: '교육, 어머니, 보호', color: '#2563eb' },
   ];
 
   // 십성 배치
@@ -816,7 +842,7 @@ function renderTenGodDistribution(
 
   // 십신 목록
   doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
-  doc.text('십신 해설', 50, y);
+  doc.text('십신(十神) 해설', 50, y);
   y += 30;
 
   for (const tg of tenGodList) {
@@ -1056,16 +1082,16 @@ function renderGlossaryPage(
   let y = 175;
 
   const glossary = [
-    { term: '천간', desc: '하늘의 기운을 나타내는 10개의 글자로, 갑, 을, 병, 정, 무, 기, 경, 신, 임, 계를 말합니다. 각각 목, 화, 토, 금, 수의 음양 기운을 담고 있으며, 사주의 위쪽 글자들이 천간에 해당합니다.' },
-    { term: '지지', desc: '땅의 기운을 나타내는 12개의 글자로, 자, 축, 인, 묘, 진, 사, 오, 미, 신, 유, 술, 해를 말합니다. 12가지 동물(띠)과 연결되며, 계절과 시간의 흐름을 상징합니다. 사주의 아래쪽 글자들이 지지에 해당합니다.' },
-    { term: '일간', desc: '생일의 천간으로, 사주의 주인공인 나를 나타냅니다. 일간의 오행과 음양에 따라 기본 성격과 기질이 결정되며, 모든 사주 분석의 출발점이 됩니다. 사주를 볼 때 가장 먼저 확인하는 핵심 글자입니다.' },
-    { term: '용신', desc: '사주에서 가장 필요로 하는 오행의 기운입니다. 사주의 균형을 잡아주는 핵심 요소로, 용신의 기운이 들어오는 시기에 운이 좋아집니다. 용신에 해당하는 색상, 방향, 숫자를 활용하면 개운에 도움이 됩니다.' },
-    { term: '대운', desc: '10년 단위로 바뀌는 인생의 큰 흐름입니다. 어떤 대운을 만나느냐에 따라 인생의 방향과 기회가 크게 달라질 수 있습니다. 대운은 월주를 기준으로 순행 또는 역행하며 펼쳐집니다.' },
-    { term: '세운', desc: '한 해의 운을 결정하는 흐름으로, 매년 바뀌는 천간과 지지가 사주와 어떤 관계를 맺느냐에 따라 그 해의 길흉이 결정됩니다. 신년운세는 바로 이 세운을 분석한 결과입니다.' },
-    { term: '상생', desc: '오행이 서로 돕는 관계입니다. 목이 화를 낳고, 화가 토를 낳고, 토가 금을 낳고, 금이 수를 낳고, 수가 목을 낳는 순서로 순환합니다. 상생 관계에 있는 오행이 만나면 서로 힘을 북돋아 줍니다.' },
-    { term: '상극', desc: '오행이 서로 억제하는 관계입니다. 목이 토를 이기고, 토가 수를 이기고, 수가 화를 이기고, 화가 금을 이기고, 금이 목을 이기는 순서로 순환합니다. 적절한 상극은 균형을 잡아주는 역할을 합니다.' },
-    { term: '십신', desc: '일간을 기준으로 다른 글자들과의 관계를 나타내는 10가지 명칭입니다. 비견, 겁재, 식신, 상관, 편재, 정재, 편관, 정관, 편인, 정인이 있으며, 각각 고유한 성격과 운명적 의미를 지닙니다.' },
-    { term: '오행', desc: '목, 화, 토, 금, 수의 다섯 가지 원소를 말합니다. 동양 철학에서 우주 만물을 구성하는 기본 요소로, 사주 안에서 이 다섯 가지 기운의 분포와 균형이 당신의 성격, 재능, 운명의 흐름을 결정짓는 핵심 요인입니다.' },
+    { term: '천간(天干)', desc: '하늘의 기운을 나타내는 10개의 글자로, 갑(甲), 을(乙), 병(丙), 정(丁), 무(戊), 기(己), 경(庚), 신(辛), 임(壬), 계(癸)를 말합니다. 각각 목(木), 화(火), 토(土), 금(金), 수(水)의 음양 기운을 담고 있으며, 사주의 위쪽 글자들이 천간에 해당합니다.' },
+    { term: '지지(地支)', desc: '땅의 기운을 나타내는 12개의 글자로, 자(子), 축(丑), 인(寅), 묘(卯), 진(辰), 사(巳), 오(午), 미(未), 신(申), 유(酉), 술(戌), 해(亥)를 말합니다. 12가지 동물(띠)과 연결되며, 계절과 시간의 흐름을 상징합니다. 사주의 아래쪽 글자들이 지지에 해당합니다.' },
+    { term: '일간(日干)', desc: '생일의 천간으로, 사주의 주인공인 나를 나타냅니다. 일간의 오행과 음양에 따라 기본 성격과 기질이 결정되며, 모든 사주 분석의 출발점이 됩니다. 사주를 볼 때 가장 먼저 확인하는 핵심 글자입니다.' },
+    { term: '용신(用神)', desc: '사주에서 가장 필요로 하는 오행의 기운입니다. 사주의 균형을 잡아주는 핵심 요소로, 용신의 기운이 들어오는 시기에 운이 좋아집니다. 용신에 해당하는 색상, 방향, 숫자를 활용하면 개운에 도움이 됩니다.' },
+    { term: '대운(大運)', desc: '10년 단위로 바뀌는 인생의 큰 흐름입니다. 어떤 대운을 만나느냐에 따라 인생의 방향과 기회가 크게 달라질 수 있습니다. 대운은 월주(月柱)를 기준으로 순행 또는 역행하며 펼쳐집니다.' },
+    { term: '세운(歲運)', desc: '한 해의 운을 결정하는 흐름으로, 매년 바뀌는 천간과 지지가 사주와 어떤 관계를 맺느냐에 따라 그 해의 길흉(吉凶)이 결정됩니다. 신년운세는 바로 이 세운을 분석한 결과입니다.' },
+    { term: '상생(相生)', desc: '오행이 서로 돕는 관계입니다. 목(木)이 화(火)를 낳고, 화가 토(土)를 낳고, 토가 금(金)을 낳고, 금이 수(水)를 낳고, 수가 목을 낳는 순서로 순환합니다. 상생 관계에 있는 오행이 만나면 서로 힘을 북돋아 줍니다.' },
+    { term: '상극(相剋)', desc: '오행이 서로 억제하는 관계입니다. 목(木)이 토(土)를 이기고, 토가 수(水)를 이기고, 수가 화(火)를 이기고, 화가 금(金)을 이기고, 금이 목을 이기는 순서로 순환합니다. 적절한 상극은 균형을 잡아주는 역할을 합니다.' },
+    { term: '십신(十神)', desc: '일간을 기준으로 다른 글자들과의 관계를 나타내는 10가지 명칭입니다. 비견(比肩), 겁재(劫財), 식신(食神), 상관(傷官), 편재(偏財), 정재(正財), 편관(偏官), 정관(正官), 편인(偏印), 정인(正印)이 있으며, 각각 고유한 성격과 운명적 의미를 지닙니다.' },
+    { term: '오행(五行)', desc: '목(木), 화(火), 토(土), 금(金), 수(水)의 다섯 가지 원소를 말합니다. 동양 철학에서 우주 만물을 구성하는 기본 요소로, 사주 안에서 이 다섯 가지 기운의 분포와 균형이 당신의 성격, 재능, 운명의 흐름을 결정짓는 핵심 요인입니다.' },
   ];
 
   for (const item of glossary) {
