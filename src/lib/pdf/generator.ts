@@ -28,17 +28,32 @@ export async function generateSajuPdf(
   result: SajuResult,
   options: PdfOptions
 ): Promise<Buffer> {
-  // Puppeteer(HTML→PDF) 우선 시도, 실패 시 PDFKit 폴백
-  try {
-    console.log('[PDF] Puppeteer HTML→PDF 생성 시도...');
-    const buffer = await generateSajuPdfFromHtml(result, options);
-    console.log('[PDF] Puppeteer 성공:', buffer.length, 'bytes');
-    return buffer;
-  } catch (err) {
-    console.warn('[PDF] Puppeteer 실패, PDFKit 폴백:', err instanceof Error ? err.message : err);
+  // AI 내러티브가 실제 GPT 모델로 생성된 경우에만 Puppeteer HTML→PDF 시도
+  const hasAiNarrative = options.narrative &&
+    options.narrative.chapters.length > 0 &&
+    options.narrative.model !== 'fallback-template' &&
+    options.productCode !== 'saju-data';
+
+  if (hasAiNarrative) {
+    try {
+      console.log('[PDF] AI 내러티브 감지 → Puppeteer HTML→PDF 시도...');
+      const timeoutMs = 15000; // 15초 타임아웃
+      const buffer = await Promise.race([
+        generateSajuPdfFromHtml(result, options),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Puppeteer 타임아웃 (15초)')), timeoutMs)
+        ),
+      ]);
+      console.log('[PDF] Puppeteer 성공:', buffer.length, 'bytes');
+      return buffer;
+    } catch (err) {
+      console.warn('[PDF] Puppeteer 실패, PDFKit 폴백:', err instanceof Error ? err.message : err);
+    }
+  } else {
+    console.log('[PDF] 레퍼런스 스타일 PDFKit 사용 (fallback 또는 데이터 상품)');
   }
 
-  // ── PDFKit 폴백 ──
+  // ── PDFKit (sajulab.kr 동일 구조) ──
   return generatePdfKitFallback(result, options);
 }
 
@@ -84,11 +99,16 @@ function generatePdfKitFallback(
         console.warn(`Font files missing: Regular=${fontRegularExists}, Bold=${fontBoldExists}. Using Helvetica.`);
       }
 
-      // LLM 내러티브가 있으면 AI 기반 PDF 생성, 없으면 기존 방식
-      if (options.narrative && options.narrative.chapters.length > 0 && options.productCode !== 'saju-data') {
+      // AI(GPT) 내러티브가 있으면 AI 기반 PDF, 없으면 sajulab.kr 동일 구조
+      const useAiNarrative = options.narrative &&
+        options.narrative.chapters.length > 0 &&
+        options.narrative.model !== 'fallback-template' &&
+        options.productCode !== 'saju-data';
+
+      if (useAiNarrative) {
         generateNarrativePdf(doc, result, options, koreanFont, koreanBoldFont);
       } else {
-        // 기존 방식 (fallback)
+        // sajulab.kr 동일 구조 (레퍼런스 스타일)
         switch (options.productCode) {
           case 'saju-basic':
             generateBasicPdf(doc, result, options, koreanFont, koreanBoldFont);
