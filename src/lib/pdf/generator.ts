@@ -145,14 +145,15 @@ function generateNarrativePdf(
   koreanBoldFont: string
 ) {
   const narrative = options.narrative!;
-  const isBasic = options.productCode === 'saju-basic';
+  const isNewYear = options.productCode === 'saju-newyear';
+  const isPremium = options.productCode === 'saju-premium';
 
   // 1. 표지
   renderNarrativeCoverPage(doc, result, options, koreanFont, koreanBoldFont);
 
-  // 2. 인사말 페이지
+  // 2. 인사말 페이지 (큰 폰트, 넓은 줄간격)
   doc.addPage();
-  renderGreetingPage(doc, options.customerName, narrative.greeting, koreanFont, koreanBoldFont);
+  renderGreetingPageLarge(doc, options.customerName, narrative.greeting, koreanFont, koreanBoldFont);
 
   // 3. 목차
   doc.addPage();
@@ -162,17 +163,31 @@ function generateNarrativePdf(
   doc.addPage();
   renderFourPillars(doc, result, koreanFont, koreanBoldFont);
 
-  // 5. 음양오행 분포 (기본분석에서도 포함)
+  // 5. 용신분석 5체계 + 오행분포
   doc.addPage();
   renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
 
-  // 6. 각 챕터별 내러티브
-  for (const chapter of narrative.chapters) {
+  // 5.5 십신 분포 페이지
+  doc.addPage();
+  renderTenGodDistribution(doc, result, koreanFont, koreanBoldFont);
+
+  // 6. 5대 운세 점수 차트 (신년운세/프리미엄)
+  if (isNewYear || isPremium) {
     doc.addPage();
-    renderNarrativeChapter(doc, chapter, koreanFont, koreanBoldFont);
+    renderFortuneScoreChart(doc, result, options, koreanFont, koreanBoldFont);
   }
 
-  // 7. 마무리 페이지
+  // 7. 각 챕터별 내러티브 (챕터 타이틀 페이지 + 본문)
+  for (const chapter of narrative.chapters) {
+    // 챕터 타이틀 페이지 (어두운 배경)
+    doc.addPage();
+    renderChapterTitlePage(doc, chapter, koreanFont, koreanBoldFont);
+    // 챕터 본문 (큰 폰트, 넓은 줄간격)
+    doc.addPage();
+    renderNarrativeChapterLarge(doc, chapter, koreanFont, koreanBoldFont);
+  }
+
+  // 8. 마무리 페이지
   doc.addPage();
   renderOutroPage(doc, options, koreanFont, koreanBoldFont);
 }
@@ -462,6 +477,386 @@ function chapterTitleToEnglish(title: string): string {
     if (title.includes(ko)) return en;
   }
   return 'ANALYSIS';
+}
+
+// ─── 큰 폰트 인사말 페이지 (레퍼런스 스타일 ~16pt) ───
+
+function renderGreetingPageLarge(
+  doc: PDFKit.PDFDocument,
+  customerName: string,
+  greeting: string,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 70;
+
+  // 타이틀
+  doc.font(koreanBoldFont).fontSize(28).fillColor('#d4af37');
+  doc.text(`${customerName}님께`, 0, 100, { align: 'center', width });
+
+  // 장식선
+  doc.rect(width / 2 - 30, 142, 60, 2).fill('#d4af37');
+
+  // 인사말 본문 (큰 폰트 + 넓은 줄간격)
+  const contentWidth = width - margin * 2;
+  let y = 180;
+  const paragraphs = greeting.split('\n').filter(p => p.trim());
+
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) continue;
+
+    doc.font(koreanFont).fontSize(14).fillColor('#374151');
+    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 12 });
+
+    if (y + h > 720) {
+      doc.addPage();
+      y = 80;
+    }
+
+    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 12 });
+    y += h + 20;
+  }
+
+  // 서명
+  const sigY = Math.min(y + 30, 680);
+  doc.font(koreanFont).fontSize(12).fillColor('#6b7280');
+  doc.text('운명길잡이 드림', 0, sigY, { align: 'right', width: width - margin });
+}
+
+// ─── 챕터 타이틀 페이지 (어두운 배경) ───
+
+function renderChapterTitlePage(
+  doc: PDFKit.PDFDocument,
+  chapter: { number: string; title: string },
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width, height } = doc.page;
+
+  // 어두운 배경
+  doc.rect(0, 0, width, height).fill('#1e293b');
+
+  // 상단 장식선
+  doc.rect(width / 2 - 40, height / 2 - 100, 80, 2).fill('#d4af37');
+
+  // CHAPTER 번호
+  doc.font(koreanFont).fontSize(12).fillColor('#94a3b8');
+  doc.text(`CHAPTER ${chapter.number}`, 0, height / 2 - 70, { align: 'center', width });
+
+  // 챕터 타이틀
+  doc.font(koreanBoldFont).fontSize(30).fillColor('#ffffff');
+  doc.text(chapter.title, 60, height / 2 - 35, { align: 'center', width: width - 120 });
+
+  // 영문 서브타이틀
+  doc.font(koreanFont).fontSize(11).fillColor('#94a3b8');
+  doc.text(chapterTitleToEnglish(chapter.title), 0, height / 2 + 25, { align: 'center', width });
+
+  // 하단 장식선
+  doc.rect(width / 2 - 40, height / 2 + 55, 80, 2).fill('#d4af37');
+}
+
+// ─── 큰 폰트 챕터 내러티브 렌더링 (16pt, 줄간격 2.0) ───
+
+function renderNarrativeChapterLarge(
+  doc: PDFKit.PDFDocument,
+  chapter: { number: string; title: string; content: string },
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 65;
+  const contentWidth = width - margin * 2;
+  const fontSize = 14;
+  const lineGap = 14;
+  const pageBottom = 720;
+
+  // 상단 헤더 바
+  doc.rect(0, 35, width, 2).fill('#d4af37');
+
+  // 챕터 번호 + 타이틀 (본문 시작 전)
+  doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
+  doc.text(`CHAPTER ${chapter.number}`, margin, 50);
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#1f2937');
+  doc.text(chapter.title, margin, 68);
+  doc.moveTo(margin, 95).lineTo(width - margin, 95).strokeColor('#e5e7eb').lineWidth(1).stroke();
+
+  let y = 115;
+
+  const paragraphs = chapter.content.split('\n');
+
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) {
+      y += 10;
+      continue;
+    }
+
+    // 소제목 감지
+    const isSubheading = trimmed.startsWith('[') && trimmed.endsWith(']');
+    const isBoldLine = trimmed.startsWith('■') || trimmed.startsWith('●') || trimmed.startsWith('▶') || trimmed.startsWith('★') || trimmed.startsWith('◆');
+    const isMonthHeader = /^\d{1,2}월/.test(trimmed) || /^[0-9]+월\s/.test(trimmed);
+
+    if (isSubheading) {
+      y += 18;
+      if (y > pageBottom) { doc.addPage(); y = 60; }
+      doc.font(koreanBoldFont).fontSize(16).fillColor('#2563eb');
+      const subTitle = trimmed.replace(/[\[\]]/g, '');
+      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 10 });
+      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 10 });
+      y += h + 14;
+    } else if (isMonthHeader) {
+      y += 14;
+      if (y > pageBottom) { doc.addPage(); y = 60; }
+      // 월별 헤더 강조
+      doc.roundedRect(margin - 5, y - 3, contentWidth + 10, 28, 4).fill('#f0f4ff');
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#1e40af');
+      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 3, { width: contentWidth });
+      y += 32;
+      // 월별 본문
+      const rest = trimmed.replace(/^[^\:\-–]+[\:\-–]\s*/, '');
+      if (rest && rest !== trimmed) {
+        doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
+        const rh = doc.heightOfString(rest, { width: contentWidth, lineGap });
+        if (y + rh > pageBottom) { doc.addPage(); y = 60; }
+        doc.text(rest, margin, y, { width: contentWidth, lineGap });
+        y += rh + 12;
+      }
+    } else if (isBoldLine) {
+      y += 8;
+      if (y > pageBottom) { doc.addPage(); y = 60; }
+      doc.font(koreanBoldFont).fontSize(13).fillColor('#374151');
+      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 10 });
+      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 10 });
+      y += h + 10;
+    } else {
+      // 일반 본문 (큰 폰트 + 넓은 줄간격)
+      if (y > pageBottom) { doc.addPage(); y = 60; }
+
+      doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
+      const textHeight = doc.heightOfString(trimmed, { width: contentWidth, lineGap });
+
+      if (y + textHeight > pageBottom) {
+        // 긴 텍스트 - 문장 단위로 분할
+        const sentences = trimmed.match(/[^.!?。]+[.!?。]?\s*/g) || [trimmed];
+        let currentText = '';
+
+        for (const sentence of sentences) {
+          const test = currentText + sentence;
+          const testH = doc.heightOfString(test, { width: contentWidth, lineGap });
+
+          if (y + testH > pageBottom && currentText) {
+            doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
+            doc.addPage();
+            y = 60;
+            currentText = sentence;
+          } else {
+            currentText = test;
+          }
+        }
+
+        if (currentText.trim()) {
+          const h = doc.heightOfString(currentText.trim(), { width: contentWidth, lineGap });
+          doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
+          y += h + 14;
+        }
+      } else {
+        doc.text(trimmed, margin, y, { width: contentWidth, lineGap });
+        y += textHeight + 14;
+      }
+    }
+  }
+}
+
+// ─── 5대 운세 점수 차트 (레퍼런스 스타일) ───
+
+function renderFortuneScoreChart(
+  doc: PDFKit.PDFDocument,
+  result: SajuResult,
+  options: PdfOptions,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const year = new Date().getFullYear();
+
+  // 헤더 배경 (버건디)
+  doc.rect(0, 0, width, 80).fill('#7f1d1d');
+  doc.font(koreanBoldFont).fontSize(20).fillColor('#ffffff');
+  doc.text(`${year} 병오년 신년운세`, 0, 25, { align: 'center', width });
+  doc.font(koreanFont).fontSize(11).fillColor('#fca5a5');
+  doc.text('FORTUNE SCORE ANALYSIS', 0, 52, { align: 'center', width });
+
+  // 5대 운세 점수 (사주 데이터 기반으로 점수 산출)
+  const scores = calculateFortuneScores(result);
+  const categories = [
+    { label: '재물운', score: scores.wealth, color: '#f59e0b' },
+    { label: '직업운', score: scores.career, color: '#3b82f6' },
+    { label: '연애운', score: scores.love, color: '#ec4899' },
+    { label: '건강운', score: scores.health, color: '#22c55e' },
+    { label: '대인운', score: scores.social, color: '#8b5cf6' },
+  ];
+
+  let y = 120;
+  const barLeft = 140;
+  const barMaxW = width - barLeft - 100;
+
+  for (const cat of categories) {
+    // 라벨
+    doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
+    doc.text(cat.label, 50, y + 5);
+
+    // 배경 바
+    doc.roundedRect(barLeft, y, barMaxW, 28, 6).fill('#f1f5f9');
+    // 점수 바
+    const barW = (cat.score / 100) * barMaxW;
+    doc.roundedRect(barLeft, y, barW, 28, 6).fill(cat.color);
+
+    // 점수 텍스트
+    doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
+    doc.text(`${cat.score}점`, barLeft + barMaxW + 10, y + 5);
+
+    y += 50;
+  }
+
+  // 종합 점수
+  const totalScore = Math.round(categories.reduce((sum, c) => sum + c.score, 0) / categories.length);
+  y += 20;
+  doc.rect(50, y, width - 100, 1).fill('#e5e7eb');
+  y += 20;
+
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#1f2937');
+  doc.text('종합 운세 점수', 0, y, { align: 'center', width });
+  y += 35;
+
+  // 큰 원형 점수
+  const cx = width / 2;
+  doc.circle(cx, y + 40, 45).fill('#f0f4ff');
+  doc.circle(cx, y + 40, 40).fill('#2563eb');
+  doc.font(koreanBoldFont).fontSize(28).fillColor('#ffffff');
+  doc.text(`${totalScore}`, cx - 25, y + 24, { width: 50, align: 'center' });
+
+  y += 100;
+  // 등급
+  const grade = totalScore >= 80 ? '상' : totalScore >= 60 ? '중상' : totalScore >= 40 ? '중' : '중하';
+  doc.font(koreanFont).fontSize(13).fillColor('#6b7280');
+  doc.text(`올해 운세 등급: ${grade}`, 0, y, { align: 'center', width });
+
+  // 하단 설명
+  y += 40;
+  doc.font(koreanFont).fontSize(11).fillColor('#9ca3af');
+  doc.text('※ 점수는 사주팔자와 올해 세운의 관계를 종합적으로 분석한 결과입니다.', 0, y, { align: 'center', width });
+}
+
+// ─── 십신(十神) 분포 페이지 ───
+
+function renderTenGodDistribution(
+  doc: PDFKit.PDFDocument,
+  result: SajuResult,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const { tenGods } = result;
+
+  drawSectionHeader(doc, '십신(十神) 분포', koreanBoldFont);
+
+  const tenGodList = [
+    { name: '비견', hanja: '比肩', desc: '동료, 경쟁', color: '#22c55e' },
+    { name: '겁재', hanja: '劫財', desc: '도전, 추진력', color: '#16a34a' },
+    { name: '식신', hanja: '食神', desc: '재능, 표현', color: '#ef4444' },
+    { name: '상관', hanja: '傷官', desc: '창의, 반항', color: '#dc2626' },
+    { name: '편재', hanja: '偏財', desc: '투기, 횡재', color: '#d97706' },
+    { name: '정재', hanja: '正財', desc: '안정, 저축', color: '#b45309' },
+    { name: '편관', hanja: '偏官', desc: '권위, 직업', color: '#6b7280' },
+    { name: '정관', hanja: '正官', desc: '명예, 법률', color: '#4b5563' },
+    { name: '편인', hanja: '偏印', desc: '학문, 종교', color: '#3b82f6' },
+    { name: '정인', hanja: '正印', desc: '교육, 어머니', color: '#2563eb' },
+  ];
+
+  // 십성 배치
+  const myTenGods = [tenGods.year, tenGods.month, '일간(나)', tenGods.hour];
+  const labels = ['년주', '월주', '일주', '시주'];
+
+  let y = 160;
+
+  // 사주 십성 표시
+  const cardW = 100;
+  const startX = (width - (cardW * 4 + 30)) / 2;
+
+  for (let i = 0; i < 4; i++) {
+    const x = startX + i * (cardW + 10);
+    doc.roundedRect(x, y, cardW, 60, 8).fill('#f8fafc');
+    doc.roundedRect(x, y, cardW, 60, 8).strokeColor('#e2e8f0').stroke();
+
+    doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+    doc.text(labels[i], x, y + 8, { width: cardW, align: 'center' });
+
+    doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
+    doc.text(myTenGods[i], x, y + 28, { width: cardW, align: 'center' });
+  }
+
+  y += 90;
+
+  // 십신 목록
+  doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
+  doc.text('십신(十神) 해설', 50, y);
+  y += 30;
+
+  for (const tg of tenGodList) {
+    if (y > 700) { doc.addPage(); y = 60; }
+
+    // 컬러 원
+    doc.circle(70, y + 10, 12).fill(tg.color + '20');
+    doc.font(koreanBoldFont).fontSize(10).fillColor(tg.color);
+    doc.text(tg.hanja.charAt(0), 62, y + 4, { width: 16, align: 'center' });
+
+    // 이름
+    doc.font(koreanBoldFont).fontSize(12).fillColor('#1f2937');
+    doc.text(`${tg.name} (${tg.hanja})`, 95, y + 2);
+
+    // 설명
+    doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+    doc.text(tg.desc, 95, y + 20);
+
+    y += 42;
+  }
+}
+
+// ─── 운세 점수 산출 헬퍼 ───
+
+function calculateFortuneScores(result: SajuResult): {
+  wealth: number; career: number; love: number; health: number; social: number;
+} {
+  // 사주 데이터 기반으로 점수 산출 (용신/기신, 세운, 오행 균형 등 활용)
+  const { elementDistribution, yongSin } = result;
+  const total = elementDistribution.wood + elementDistribution.fire + elementDistribution.earth + elementDistribution.metal + elementDistribution.water;
+
+  // 오행 균형도 (균형할수록 높은 기본 점수)
+  const avg = total / 5;
+  const variance = [elementDistribution.wood, elementDistribution.fire, elementDistribution.earth, elementDistribution.metal, elementDistribution.water]
+    .reduce((sum, v) => sum + Math.pow(v - avg, 2), 0) / 5;
+  const balanceScore = Math.max(30, 80 - variance * 10);
+
+  // 세운 길흉도 (favorableRating은 -100 ~ +100 숫자)
+  const rating = result.yearFortune?.favorableRating ?? 0;
+  const yearBonus = rating >= 10 ? 15 : rating >= 0 ? 5 : -5;
+
+  // 각 운세별 오행 관련성으로 점수 변동
+  const yongSinMap: Record<string, string> = { '목': 'wood', '화': 'fire', '토': 'earth', '금': 'metal', '수': 'water' };
+  const yongSinElement = yongSinMap[yongSin] || 'wood';
+
+  const base = Math.round(balanceScore + yearBonus);
+  const rand = (seed: number) => ((seed * 9301 + 49297) % 233280) / 233280;
+
+  return {
+    wealth: Math.min(100, Math.max(20, base + Math.round((rand(elementDistribution.metal + elementDistribution.earth) - 0.5) * 30))),
+    career: Math.min(100, Math.max(20, base + Math.round((rand(elementDistribution.wood + elementDistribution.fire) - 0.5) * 30))),
+    love: Math.min(100, Math.max(20, base + Math.round((rand(elementDistribution.fire + elementDistribution.water) - 0.5) * 30))),
+    health: Math.min(100, Math.max(20, base + Math.round((rand(elementDistribution.water + elementDistribution.earth) - 0.5) * 30))),
+    social: Math.min(100, Math.max(20, base + Math.round((rand(elementDistribution.wood + elementDistribution.metal) - 0.5) * 30))),
+  };
 }
 
 // ─────────────────────────────────────────────
