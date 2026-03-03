@@ -155,6 +155,10 @@ function generateNarrativePdf(
   doc.addPage();
   renderGreetingPageLarge(doc, options.customerName, narrative.greeting, koreanFont, koreanBoldFont);
 
+  // 2.5 분석 안내 페이지
+  doc.addPage();
+  renderAnalysisGuidePage(doc, options, koreanFont, koreanBoldFont);
+
   // 3. 목차
   doc.addPage();
   renderNarrativeTableOfContents(doc, narrative.chapters, koreanFont, koreanBoldFont);
@@ -162,6 +166,10 @@ function generateNarrativePdf(
   // 4. 사주원국표
   doc.addPage();
   renderFourPillars(doc, result, koreanFont, koreanBoldFont);
+
+  // 4.5 사주원국 해설 페이지
+  doc.addPage();
+  renderFourPillarsExplanation(doc, result, koreanFont, koreanBoldFont);
 
   // 5. 용신분석 5체계 + 오행분포
   doc.addPage();
@@ -175,6 +183,9 @@ function generateNarrativePdf(
   if (isNewYear || isPremium) {
     doc.addPage();
     renderFortuneScoreChart(doc, result, options, koreanFont, koreanBoldFont);
+    // 6.5 운세 점수 해설 페이지
+    doc.addPage();
+    renderFortuneScoreExplanation(doc, result, options, koreanFont, koreanBoldFont);
   }
 
   // 7. 각 챕터별 내러티브 (챕터 타이틀 페이지 + 본문)
@@ -187,7 +198,11 @@ function generateNarrativePdf(
     renderNarrativeChapterLarge(doc, chapter, koreanFont, koreanBoldFont);
   }
 
-  // 8. 마무리 페이지
+  // 8. 용어 해설 페이지
+  doc.addPage();
+  renderGlossaryPage(doc, koreanFont, koreanBoldFont);
+
+  // 9. 마무리 페이지
   doc.addPage();
   renderOutroPage(doc, options, koreanFont, koreanBoldFont);
 }
@@ -507,16 +522,16 @@ function renderGreetingPageLarge(
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    doc.font(koreanFont).fontSize(18).fillColor('#374151');
-    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 24 });
+    doc.font(koreanFont).fontSize(20).fillColor('#374151');
+    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 28 });
 
-    if (y + h > 680) {
+    if (y + h > 640) {
       doc.addPage();
       y = 80;
     }
 
-    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 24 });
-    y += h + 28;
+    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 28 });
+    y += h + 32;
   }
 
   // 서명
@@ -566,30 +581,30 @@ function renderNarrativeChapterLarge(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 80;
+  const margin = 85;
   const contentWidth = width - margin * 2;
-  const fontSize = 18;
-  const lineGap = 26;
-  const pageBottom = 680;
+  const fontSize = 20;
+  const lineGap = 32;
+  const pageBottom = 640;
 
   // 상단 헤더 바
   doc.rect(0, 35, width, 2).fill('#d4af37');
 
   // 챕터 번호 + 타이틀 (본문 시작 전)
   doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
-  doc.text(`CHAPTER ${chapter.number}`, margin, 50);
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#1f2937');
-  doc.text(chapter.title, margin, 68);
-  doc.moveTo(margin, 95).lineTo(width - margin, 95).strokeColor('#e5e7eb').lineWidth(1).stroke();
+  doc.text(`CHAPTER ${chapter.number}`, margin, 55);
+  doc.font(koreanBoldFont).fontSize(20).fillColor('#1f2937');
+  doc.text(chapter.title, margin, 75);
+  doc.moveTo(margin, 105).lineTo(width - margin, 105).strokeColor('#e5e7eb').lineWidth(1).stroke();
 
-  let y = 115;
+  let y = 130;
 
   const paragraphs = chapter.content.split('\n');
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
     if (!trimmed) {
-      y += 10;
+      y += 18;
       continue;
     }
 
@@ -599,40 +614,40 @@ function renderNarrativeChapterLarge(
     const isMonthHeader = /^\d{1,2}월/.test(trimmed) || /^[0-9]+월\s/.test(trimmed);
 
     if (isSubheading) {
-      y += 18;
-      if (y > pageBottom) { doc.addPage(); y = 60; }
-      doc.font(koreanBoldFont).fontSize(16).fillColor('#2563eb');
+      y += 24;
+      if (y > pageBottom) { doc.addPage(); y = 70; }
+      doc.font(koreanBoldFont).fontSize(18).fillColor('#2563eb');
       const subTitle = trimmed.replace(/[\[\]]/g, '');
-      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 10 });
-      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 10 });
-      y += h + 14;
+      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 12 });
+      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 12 });
+      y += h + 20;
     } else if (isMonthHeader) {
-      y += 14;
-      if (y > pageBottom) { doc.addPage(); y = 60; }
+      y += 20;
+      if (y > pageBottom) { doc.addPage(); y = 70; }
       // 월별 헤더 강조
-      doc.roundedRect(margin - 5, y - 3, contentWidth + 10, 28, 4).fill('#f0f4ff');
-      doc.font(koreanBoldFont).fontSize(14).fillColor('#1e40af');
-      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 3, { width: contentWidth });
-      y += 32;
+      doc.roundedRect(margin - 5, y - 5, contentWidth + 10, 34, 4).fill('#f0f4ff');
+      doc.font(koreanBoldFont).fontSize(16).fillColor('#1e40af');
+      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 4, { width: contentWidth });
+      y += 42;
       // 월별 본문
       const rest = trimmed.replace(/^[^\:\-–]+[\:\-–]\s*/, '');
       if (rest && rest !== trimmed) {
         doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
         const rh = doc.heightOfString(rest, { width: contentWidth, lineGap });
-        if (y + rh > pageBottom) { doc.addPage(); y = 60; }
+        if (y + rh > pageBottom) { doc.addPage(); y = 70; }
         doc.text(rest, margin, y, { width: contentWidth, lineGap });
-        y += rh + 12;
+        y += rh + 18;
       }
     } else if (isBoldLine) {
-      y += 8;
-      if (y > pageBottom) { doc.addPage(); y = 60; }
-      doc.font(koreanBoldFont).fontSize(13).fillColor('#374151');
-      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 10 });
-      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 10 });
-      y += h + 10;
+      y += 12;
+      if (y > pageBottom) { doc.addPage(); y = 70; }
+      doc.font(koreanBoldFont).fontSize(15).fillColor('#374151');
+      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 14 });
+      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 14 });
+      y += h + 16;
     } else {
       // 일반 본문 (큰 폰트 + 넓은 줄간격)
-      if (y > pageBottom) { doc.addPage(); y = 60; }
+      if (y > pageBottom) { doc.addPage(); y = 70; }
 
       doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
       const textHeight = doc.heightOfString(trimmed, { width: contentWidth, lineGap });
@@ -649,7 +664,7 @@ function renderNarrativeChapterLarge(
           if (y + testH > pageBottom && currentText) {
             doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
             doc.addPage();
-            y = 60;
+            y = 70;
             currentText = sentence;
           } else {
             currentText = test;
@@ -659,11 +674,11 @@ function renderNarrativeChapterLarge(
         if (currentText.trim()) {
           const h = doc.heightOfString(currentText.trim(), { width: contentWidth, lineGap });
           doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
-          y += h + 14;
+          y += h + 20;
         }
       } else {
         doc.text(trimmed, margin, y, { width: contentWidth, lineGap });
-        y += textHeight + 14;
+        y += textHeight + 20;
       }
     }
   }
@@ -821,6 +836,248 @@ function renderTenGodDistribution(
     doc.text(tg.desc, 95, y + 20);
 
     y += 42;
+  }
+}
+
+// ─── 분석 안내 페이지 ───
+
+function renderAnalysisGuidePage(
+  doc: PDFKit.PDFDocument,
+  options: PdfOptions,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 80;
+  const contentWidth = width - margin * 2;
+
+  // 헤더
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text('ANALYSIS GUIDE', margin, 70);
+
+  doc.font(koreanBoldFont).fontSize(26).fillColor('#1f2937');
+  doc.text('사주 분석 안내', margin, 95);
+
+  doc.rect(margin, 132, 50, 3).fill('#d4af37');
+  doc.moveTo(margin, 145).lineTo(width - margin, 145).strokeColor('#e5e7eb').lineWidth(1).stroke();
+
+  let y = 175;
+  const guideItems = [
+    {
+      title: '사주팔자(四柱八字)란?',
+      content: '사주팔자는 태어난 해, 달, 날, 시간을 네 개의 기둥(四柱)과 여덟 개의 글자(八字)로 나타낸 것입니다. 이 여덟 글자에는 당신의 타고난 성격, 재능, 인연, 그리고 인생의 흐름이 담겨 있습니다. 수천 년 동양 철학의 지혜가 녹아든 사주명리학은 단순한 점술이 아닌, 자연의 이치를 바탕으로 한 깊이 있는 인생 분석 체계입니다.',
+    },
+    {
+      title: '용신(用神)이란?',
+      content: '용신은 사주에서 가장 필요로 하는 오행의 기운을 말합니다. 사주의 균형을 잡아주고, 부족한 기운을 채워주는 핵심 요소입니다. 용신의 기운을 잘 활용하면 운을 더욱 좋은 방향으로 이끌 수 있으며, 일상에서 용신에 해당하는 색상, 방향, 숫자 등을 활용하면 개운 효과를 기대할 수 있습니다.',
+    },
+    {
+      title: '오행(五行)의 의미',
+      content: '오행은 목(木), 화(火), 토(土), 금(金), 수(水)의 다섯 가지 원소를 말합니다. 이 다섯 가지 기운은 서로 돕고(상생) 억제하는(상극) 관계를 가지며, 사주 안에서 이 오행의 분포와 관계가 당신의 성격과 운명의 흐름을 결정짓는 핵심 요인이 됩니다.',
+    },
+    {
+      title: '대운(大運)과 세운(歲運)',
+      content: '대운은 10년 단위로 바뀌는 큰 운의 흐름이고, 세운은 해마다 바뀌는 한 해의 운입니다. 대운이 인생의 큰 그림을 그린다면, 세운은 그 해의 구체적인 분위기와 기회를 보여줍니다. 이 두 가지를 함께 보면 더 정확한 시기별 운세 판단이 가능합니다.',
+    },
+    {
+      title: '이 분석서 활용법',
+      content: '이 분석서는 당신의 사주를 깊이 있게 분석하여, 타고난 성향부터 재물운, 직업운, 연애운, 건강운까지 다각도로 살펴본 결과입니다. 운명은 정해진 것이 아니라 알고 대비하면 더 좋은 방향으로 바꿀 수 있습니다. 이 분석서를 삶의 나침반으로 활용하시기 바랍니다.',
+    },
+  ];
+
+  for (const item of guideItems) {
+    if (y > 580) { doc.addPage(); y = 80; }
+
+    // 제목
+    doc.font(koreanBoldFont).fontSize(16).fillColor('#1e40af');
+    doc.text(item.title, margin, y);
+    y += 28;
+
+    // 내용
+    doc.font(koreanFont).fontSize(14).fillColor('#374151');
+    const h = doc.heightOfString(item.content, { width: contentWidth, lineGap: 16 });
+    doc.text(item.content, margin, y, { width: contentWidth, lineGap: 16 });
+    y += h + 30;
+  }
+}
+
+// ─── 사주원국 해설 페이지 ───
+
+function renderFourPillarsExplanation(
+  doc: PDFKit.PDFDocument,
+  result: SajuResult,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 80;
+  const contentWidth = width - margin * 2;
+  const { fourPillars, yongSin, elementDistribution } = result;
+
+  // 헤더
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text('FOUR PILLARS INTERPRETATION', margin, 70);
+
+  doc.font(koreanBoldFont).fontSize(24).fillColor('#1f2937');
+  doc.text('사주원국 해설', margin, 95);
+
+  doc.rect(margin, 130, 50, 3).fill('#d4af37');
+
+  let y = 160;
+
+  // 일간 해설
+  const dayElement = fourPillars.day.elementKo;
+  const dayStem = fourPillars.day.heavenlyStemKo;
+
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#1e40af');
+  doc.text(`일간: ${dayStem} (${dayElement}의 기운)`, margin, y);
+  y += 35;
+
+  const dayExplanation = `당신의 일간은 ${dayStem}으로, ${dayElement}의 기운을 타고났습니다. 일간은 사주의 주인공으로서 당신 자신을 나타내는 핵심 글자입니다. ${dayElement}의 성질에 따라 기본적인 성격과 가치관, 행동 양식이 결정됩니다.`;
+  doc.font(koreanFont).fontSize(16).fillColor('#374151');
+  const dh = doc.heightOfString(dayExplanation, { width: contentWidth, lineGap: 22 });
+  doc.text(dayExplanation, margin, y, { width: contentWidth, lineGap: 22 });
+  y += dh + 30;
+
+  // 용신 해설
+  if (y > 500) { doc.addPage(); y = 80; }
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#1e40af');
+  doc.text(`용신: ${yongSin}`, margin, y);
+  y += 35;
+
+  const yongSinExplanation = `당신의 용신은 ${yongSin}입니다. 용신은 사주에서 가장 필요로 하는 기운으로, 이 기운을 보충하면 운이 상승합니다. 일상에서 ${yongSin}에 해당하는 색상, 방향, 직업 등을 가까이하면 좋은 효과를 볼 수 있습니다.`;
+  doc.font(koreanFont).fontSize(16).fillColor('#374151');
+  const yh = doc.heightOfString(yongSinExplanation, { width: contentWidth, lineGap: 22 });
+  doc.text(yongSinExplanation, margin, y, { width: contentWidth, lineGap: 22 });
+  y += yh + 30;
+
+  // 오행 분포 해설
+  if (y > 500) { doc.addPage(); y = 80; }
+  doc.font(koreanBoldFont).fontSize(18).fillColor('#1e40af');
+  doc.text('오행 분포 분석', margin, y);
+  y += 35;
+
+  const elements = [
+    { name: '목(木)', count: elementDistribution.wood, desc: '성장, 창의력, 인내' },
+    { name: '화(火)', count: elementDistribution.fire, desc: '열정, 예의, 표현력' },
+    { name: '토(土)', count: elementDistribution.earth, desc: '안정, 신뢰, 중재' },
+    { name: '금(金)', count: elementDistribution.metal, desc: '결단, 정의, 의리' },
+    { name: '수(水)', count: elementDistribution.water, desc: '지혜, 유연, 소통' },
+  ];
+
+  for (const el of elements) {
+    if (y > 600) { doc.addPage(); y = 80; }
+    doc.font(koreanBoldFont).fontSize(14).fillColor('#374151');
+    doc.text(`${el.name} ${el.count}개 - ${el.desc}`, margin + 10, y);
+    y += 32;
+  }
+}
+
+// ─── 운세 점수 해설 페이지 ───
+
+function renderFortuneScoreExplanation(
+  doc: PDFKit.PDFDocument,
+  result: SajuResult,
+  options: PdfOptions,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 80;
+  const contentWidth = width - margin * 2;
+  const scores = calculateFortuneScores(result);
+  const year = new Date().getFullYear();
+
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text('FORTUNE SCORE DETAILS', margin, 70);
+
+  doc.font(koreanBoldFont).fontSize(24).fillColor('#1f2937');
+  doc.text(`${year}년 운세 점수 해설`, margin, 95);
+
+  doc.rect(margin, 130, 50, 3).fill('#d4af37');
+
+  let y = 165;
+
+  const details = [
+    { label: '재물운', score: scores.wealth, color: '#f59e0b',
+      high: '올해 재물 운이 좋은 편입니다. 투자나 재테크에 좋은 기회가 올 수 있으며, 안정적인 수입이 기대됩니다. 다만 과도한 지출은 삼가고, 계획적인 자산 관리를 하시는 것이 좋겠습니다.',
+      low: '올해 재물 운에 다소 주의가 필요합니다. 큰 투자나 보증은 피하시고, 안정적인 저축 위주의 재정 관리를 추천드립니다. 용신의 기운을 활용하면 재물 운을 보강할 수 있습니다.' },
+    { label: '직업운', score: scores.career, color: '#3b82f6',
+      high: '직장이나 사업에서 좋은 성과를 기대할 수 있는 해입니다. 승진이나 이직의 기회가 올 수 있으며, 새로운 프로젝트에서 두각을 나타낼 수 있습니다.',
+      low: '직업적으로 안정을 유지하는 것이 중요한 해입니다. 무리한 이직이나 사업 확장보다는 현재 위치에서 실력을 쌓는 데 집중하시기 바랍니다.' },
+    { label: '연애운', score: scores.love, color: '#ec4899',
+      high: '인연의 기운이 좋은 해입니다. 미혼이라면 좋은 만남이 기대되고, 기혼이라면 부부 관계가 더욱 돈독해질 수 있습니다.',
+      low: '감정적인 갈등에 주의가 필요한 해입니다. 소통을 통해 오해를 풀고, 상대방을 이해하려는 노력이 필요합니다.' },
+    { label: '건강운', score: scores.health, color: '#22c55e',
+      high: '건강 상태가 비교적 양호한 해입니다. 규칙적인 운동과 균형 잡힌 식단을 유지하면 더욱 건강한 한 해를 보낼 수 있습니다.',
+      low: '건강 관리에 특별히 신경을 써야 하는 해입니다. 과로를 피하고 충분한 휴식을 취하시기 바랍니다. 정기 검진도 추천드립니다.' },
+    { label: '대인운', score: scores.social, color: '#8b5cf6',
+      high: '대인관계가 원활한 해입니다. 귀인의 도움을 받을 수 있으며, 새로운 인맥이 좋은 기회를 가져다줄 수 있습니다.',
+      low: '대인관계에서 신중함이 필요한 해입니다. 가까운 사람과의 갈등을 조심하고, 새로운 관계에서는 신뢰를 먼저 쌓으시기 바랍니다.' },
+  ];
+
+  for (const d of details) {
+    if (y > 520) { doc.addPage(); y = 80; }
+
+    // 라벨 + 점수
+    doc.font(koreanBoldFont).fontSize(17).fillColor(d.color);
+    doc.text(`${d.label}  ${d.score}점`, margin, y);
+    y += 30;
+
+    // 해설
+    const text = d.score >= 60 ? d.high : d.low;
+    doc.font(koreanFont).fontSize(15).fillColor('#374151');
+    const h = doc.heightOfString(text, { width: contentWidth, lineGap: 18 });
+    doc.text(text, margin, y, { width: contentWidth, lineGap: 18 });
+    y += h + 28;
+  }
+}
+
+// ─── 용어 해설 페이지 ───
+
+function renderGlossaryPage(
+  doc: PDFKit.PDFDocument,
+  koreanFont: string,
+  koreanBoldFont: string
+) {
+  const { width } = doc.page;
+  const margin = 80;
+  const contentWidth = width - margin * 2;
+
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text('GLOSSARY', margin, 70);
+
+  doc.font(koreanBoldFont).fontSize(26).fillColor('#1f2937');
+  doc.text('사주명리 용어 해설', margin, 95);
+
+  doc.rect(margin, 132, 50, 3).fill('#d4af37');
+  doc.moveTo(margin, 145).lineTo(width - margin, 145).strokeColor('#e5e7eb').lineWidth(1).stroke();
+
+  let y = 175;
+
+  const glossary = [
+    { term: '천간(天干)', desc: '하늘의 기운을 나타내는 10개의 글자로, 갑(甲), 을(乙), 병(丙), 정(丁), 무(戊), 기(己), 경(庚), 신(辛), 임(壬), 계(癸)를 말합니다. 각각 목, 화, 토, 금, 수의 음양 기운을 담고 있습니다.' },
+    { term: '지지(地支)', desc: '땅의 기운을 나타내는 12개의 글자로, 자(子), 축(丑), 인(寅), 묘(卯), 진(辰), 사(巳), 오(午), 미(未), 신(申), 유(酉), 술(戌), 해(亥)를 말합니다. 12가지 동물(띠)과 연결되며, 계절과 시간의 흐름을 상징합니다.' },
+    { term: '일간(日干)', desc: '생일의 천간으로, 사주의 주인공인 \'나\'를 나타냅니다. 일간의 오행과 음양에 따라 기본 성격과 기질이 결정되며, 모든 사주 분석의 출발점이 됩니다.' },
+    { term: '용신(用神)', desc: '사주에서 가장 필요로 하는 오행의 기운입니다. 사주의 균형을 잡아주는 핵심 요소로, 용신의 기운이 들어오는 시기에 운이 좋아집니다.' },
+    { term: '대운(大運)', desc: '10년 단위로 바뀌는 인생의 큰 흐름입니다. 어떤 대운을 만나느냐에 따라 인생의 방향과 기회가 크게 달라질 수 있습니다.' },
+    { term: '세운(歲運)', desc: '한 해의 운을 결정하는 흐름으로, 매년 바뀌는 천간과 지지가 사주와 어떤 관계를 맺느냐에 따라 그 해의 길흉이 결정됩니다.' },
+    { term: '상생(相生)', desc: '오행이 서로 돕는 관계입니다. 목생화(木→火), 화생토(火→土), 토생금(土→金), 금생수(金→水), 수생목(水→木)의 순서로 순환합니다.' },
+    { term: '상극(相剋)', desc: '오행이 서로 억제하는 관계입니다. 목극토(木→土), 토극수(土→水), 수극화(水→火), 화극금(火→金), 금극목(金→木)의 순서로 순환합니다.' },
+    { term: '십신(十神)', desc: '일간을 기준으로 다른 글자들과의 관계를 나타내는 10가지 명칭입니다. 비견, 겁재, 식신, 상관, 편재, 정재, 편관, 정관, 편인, 정인이 있으며, 각각 고유한 성격과 운명적 의미를 지닙니다.' },
+  ];
+
+  for (const item of glossary) {
+    if (y > 560) { doc.addPage(); y = 80; }
+
+    doc.font(koreanBoldFont).fontSize(15).fillColor('#1e40af');
+    doc.text(item.term, margin, y);
+    y += 26;
+
+    doc.font(koreanFont).fontSize(14).fillColor('#374151');
+    const h = doc.heightOfString(item.desc, { width: contentWidth, lineGap: 14 });
+    doc.text(item.desc, margin, y, { width: contentWidth, lineGap: 14 });
+    y += h + 24;
   }
 }
 
