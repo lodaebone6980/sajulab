@@ -109,6 +109,10 @@ export interface SajuResult {
     year: TenGod;
     month: TenGod;
     hour: TenGod;
+    yearBranch?: TenGod;
+    monthBranch?: TenGod;
+    dayBranch?: TenGod;
+    hourBranch?: TenGod;
   };
   fortune: FortuneAnalysis;
   daeUn: DaeUn[];

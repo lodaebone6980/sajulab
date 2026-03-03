@@ -1513,9 +1513,13 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text('십성', tableX, ty + 10, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
-    const tg = i === 1 ? '일간' : (pillars[i].tenGod || '-');
+    let branchTenGod = '-';
+    if (i === 0) branchTenGod = tenGods.hourBranch || '-';      // 시주
+    else if (i === 1) branchTenGod = tenGods.dayBranch || '-';   // 일주
+    else if (i === 2) branchTenGod = tenGods.monthBranch || '-'; // 월주
+    else if (i === 3) branchTenGod = tenGods.yearBranch || '-';  // 년주
     doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(tg, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+    doc.text(branchTenGod, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
   }
   ty += 30;
 
@@ -1524,11 +1528,25 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text('운성', tableX, ty + 10, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
-    const keys = ['hour','day','month','year'] as const;
-    const stageObj = result.twelveStages;
-    const stageVal = stageObj ? (stageObj as unknown as Record<string, string>)[keys[i]] || '-' : '-';
+    const keys = ['hour', 'day', 'month', 'year'] as const;
+    const stageVal = result.twelveStages?.bong?.[keys[i]] || '-';
     doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(String(stageVal), tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+    doc.text(stageVal, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+  }
+  ty += 30;
+
+  // ─── 신살 행 ───
+  doc.rect(tableX, ty, tableW, 30).strokeColor('#e2e8f0').stroke();
+  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+  doc.text('신살', tableX, ty + 10, { width: labelColW, align: 'center' });
+  for (let i = 0; i < 4; i++) {
+    const pillars_order = ['hour', 'day', 'month', 'year'] as const;
+    const currentPillar = pillars_order[i];
+    // Find all sinsal entries for this pillar
+    const sinsalForPillar = result.sinsal?.filter(s => s.pillar === currentPillar).map(s => s.name) || [];
+    const sinsalText = sinsalForPillar.length > 0 ? sinsalForPillar.join(',') : '-';
+    doc.font(koreanFont).fontSize(11).fillColor('#374151');
+    doc.text(sinsalText, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
   }
   ty += 30;
 
@@ -1606,9 +1624,15 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   const barY = y + 30;
   const barH = 24;
   const totalPillars = 8;
-  // 사주 8자에서 양 개수 계산
+  // 사주 8자(천간4+지지4) 각각의 음양을 개별 계산
   const fp = result.fourPillars;
-  const yangCount = [fp.year, fp.month, fp.day, fp.hour].filter(p => p.yinYangKo === '양').length * 2 || 4;
+  const yangStems = ['甲', '丙', '戊', '庚', '壬']; // 양 천간
+  const yangBranches = ['子', '寅', '辰', '午', '申', '戌']; // 양 지지
+  let yangCount = 0;
+  for (const p of [fp.year, fp.month, fp.day, fp.hour]) {
+    if (yangStems.includes(p.heavenlyStem)) yangCount++;
+    if (yangBranches.includes(p.earthlyBranch)) yangCount++;
+  }
   const yinCount = totalPillars - yangCount;
   const yangPct = Math.round((yangCount / totalPillars) * 100);
   const yinPct = 100 - yangPct;
@@ -1622,14 +1646,15 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
     doc.text(`陽 양 ${yangCount}개 (${yangPct}%)`, margin + 16, barY + 7, { width: yangW, align: 'center' });
   }
   if (yinW > 20) {
-    doc.font(koreanBoldFont).fontSize(9).fillColor('#6b7280');
+    doc.roundedRect(margin + 16 + yangW, barY, yinW, barH, 12).fill('#4a4a6a');
+    doc.font(koreanBoldFont).fontSize(9).fillColor('#ffffff');
     doc.text(`陰 음 ${yinCount}개 (${yinPct}%)`, margin + 16 + yangW, barY + 7, { width: yinW, align: 'center' });
   }
 
   // ─── 오행 분포도 박스 ───
   y = 195;
-  doc.roundedRect(margin, y, contentW, 300, 8).fill('#f8f7f4');
-  doc.roundedRect(margin, y, contentW, 300, 8).strokeColor('#e8e5de').stroke();
+  doc.roundedRect(margin, y, contentW, 310, 8).fill('#f8f7f4');
+  doc.roundedRect(margin, y, contentW, 310, 8).strokeColor('#e8e5de').stroke();
 
   doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
   doc.text('오행 분포도', margin + 16, y + 14);
@@ -1643,45 +1668,52 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   ];
 
   const totalElements = elements.reduce((s, e) => s + e.value, 0) || 1;
-  const barLeft = margin + 110;
-  const barMaxW = contentW - 180;
-  let ey = y + 40;
+  const barLeft = margin + 120;
+  const barMaxW = contentW - 190;
+  let ey = y + 42;
+  const rowH = 50;
+  const circleR = 19;
 
   for (const el of elements) {
     const pct = Math.round((el.value / totalElements) * 100);
     const barW = (pct / 100) * barMaxW;
+    const centerY = ey + rowH / 2;
 
-    // 한자 원형 아이콘 (크게)
-    doc.circle(margin + 36, ey + 16, 18).fill(el.color + '25');
-    doc.font(koreanBoldFont).fontSize(16).fillColor(el.color);
-    doc.text(el.hanja, margin + 20, ey + 9, { width: 32, align: 'center' });
+    // 한자 원형 아이콘 - 컬러 배경 + 흰색 텍스트 (sajulab.kr 스타일)
+    doc.circle(margin + 38, centerY, circleR).fill(el.color);
+    doc.font(koreanBoldFont).fontSize(17).fillColor('#ffffff');
+    doc.text(el.hanja, margin + 38 - circleR, centerY - 10, { width: circleR * 2, align: 'center' });
 
     // 한글 레이블
-    doc.font(koreanFont).fontSize(12).fillColor('#374151');
-    doc.text(el.label, margin + 62, ey + 10, { width: 40 });
+    doc.font(koreanFont).fontSize(13).fillColor('#374151');
+    doc.text(el.label, margin + 64, centerY - 7, { width: 45 });
 
     // 바 배경 (둥근 끝)
-    doc.roundedRect(barLeft, ey + 4, barMaxW, 24, 12).fill('#e8e5de');
+    doc.roundedRect(barLeft, centerY - 13, barMaxW, 26, 13).fill('#e8e5de');
 
     // 바 채움
     if (barW > 0) {
-      doc.roundedRect(barLeft, ey + 4, Math.max(barW, 24), 24, 12).fill(el.color);
+      doc.roundedRect(barLeft, centerY - 13, Math.max(barW, 26), 26, 13).fill(el.color);
       // 퍼센트 텍스트 (바 안에)
-      if (pct > 10) {
+      if (pct > 8) {
         doc.font(koreanBoldFont).fontSize(10).fillColor('#ffffff');
-        doc.text(`${pct}%`, barLeft, ey + 10, { width: Math.max(barW, 24), align: 'center' });
+        doc.text(`${pct}%`, barLeft, centerY - 6, { width: Math.max(barW, 26), align: 'center' });
       }
+    } else {
+      // 0%일 때도 텍스트 표시
+      doc.font(koreanFont).fontSize(10).fillColor('#9ca3af');
+      doc.text('0%', barLeft + 8, centerY - 6);
     }
 
     // 개수
-    doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(`${el.value}개`, barLeft + barMaxW + 12, ey + 10);
+    doc.font(koreanFont).fontSize(12).fillColor('#374151');
+    doc.text(`${el.value}개`, barLeft + barMaxW + 14, centerY - 7);
 
-    ey += 48;
+    ey += rowH;
   }
 
   // ─── 음양이란 / 오행이란 설명 ───
-  y = 510;
+  y = 520;
   const halfW = (contentW - 20) / 2;
 
   // 음양이란
@@ -2163,63 +2195,101 @@ function renderMonthFortunePage(doc: PDFKit.PDFDocument, result: SajuResult, kor
 
   if (!result.monthFortunes || result.monthFortunes.length === 0) return;
 
-  // 월별 점수 계산 (10점 만점, 12운성 기반)
+  // 12운성별 기본 점수 (소수점 포함, sajulab.kr 스타일)
   const stageScoreMap: Record<string, number> = {
     '장생': 8, '목욕': 5, '관대': 7, '건록': 9, '제왕': 10,
-    '쇠': 4, '병': 3, '사': 2, '묘': 1, '절': 2, '태': 4, '양': 6,
+    '쇠': 4, '병': 3.5, '사': 2.5, '묘': 1.5, '절': 2, '태': 4.5, '양': 6,
   };
+
+  // 십신별 가중치 (용신/희신이면 +0.5~1, 기신/구신이면 -0.5~1)
+  const tenGodModifier = (tenGod: string | undefined): number => {
+    if (!tenGod) return 0;
+    const positive = ['정관', '편관', '정인', '편인'];
+    const negative = ['상관', '겁재'];
+    if (positive.includes(tenGod)) return 0.5;
+    if (negative.includes(tenGod)) return -0.5;
+    return 0;
+  };
+
+  // 12운성별 의미있는 설명 (sajulab.kr 스타일)
+  const stageDescription: Record<string, string> = {
+    '장생': '표현의 새로운 시작',
+    '목욕': '정화의 시기',
+    '관대': '도약의 준비',
+    '건록': '재물의 도약의 기회',
+    '제왕': '승진의 최고의 성과',
+    '쇠': '신중한 선택',
+    '병': '전환의 시기',
+    '사': '잉태의 시기',
+    '묘': '내면 성찰',
+    '절': '휴식 필요',
+    '태': '내면 성장',
+    '양': '재정비',
+  };
+
   const monthScores = result.monthFortunes.map(mf => {
     const base = stageScoreMap[mf.twelveStage] || 5;
-    return { ...mf, score: base };
+    const mod = tenGodModifier(mf.tenGod);
+    const score = Math.max(1, Math.min(10, +(base + mod).toFixed(1)));
+    const desc = stageDescription[mf.twelveStage] || '변화의 시기';
+    return { ...mf, score, desc };
   });
 
-  // ─── 월별 바 차트 (sajulab.kr 스타일) ───
+  // 2월부터 시작하도록 정렬 (sajulab.kr 스타일)
+  const sorted = [...monthScores].sort((a, b) => {
+    const am = a.month >= 2 ? a.month : a.month + 12;
+    const bm = b.month >= 2 ? b.month : b.month + 12;
+    return am - bm;
+  });
+
+  // ─── 월별 바 차트 ───
   let y = 100;
   const barLeft = margin + 50;
-  const barMaxW = contentW - 170;
-  const rowH = 34;
+  const barMaxW = contentW - 180;
+  const rowH = 32;
 
-  for (const ms of monthScores) {
+  for (const ms of sorted) {
     const barW = (ms.score / 10) * barMaxW;
-    const color = ms.score >= 8 ? '#5c2626' : ms.score >= 6 ? '#7a6855' : ms.score >= 4 ? '#5a7a6b' : '#c47d5e';
-    const grade = ms.score >= 9 ? '대길' : ms.score >= 7 ? '' : ms.score <= 3 ? '주의' : '';
+    // 색상: 빨강(낮음)→갈색→금색→녹색(높음) sajulab.kr 스타일
+    const color = ms.score >= 9 ? '#2d6a4f' : ms.score >= 7.5 ? '#5a7a6b' :
+                  ms.score >= 6 ? '#c4a055' : ms.score >= 4.5 ? '#7a6855' : '#8b3a3a';
+    const grade = ms.score >= 9 ? '대길' : ms.score <= 4 ? '주의' : '';
 
     // 월 라벨
     doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
-    doc.text(`${ms.month}월`, margin + 5, y + 8, { width: 35, align: 'right' });
+    doc.text(`${ms.month}월`, margin + 2, y + 6, { width: 38, align: 'right' });
 
     // 바 배경
-    doc.roundedRect(barLeft, y + 4, barMaxW, 20, 10).fill('#e8e5de');
+    doc.roundedRect(barLeft, y + 2, barMaxW, 22, 11).fill('#e8e5de');
     // 바 채움
     if (barW > 0) {
-      doc.roundedRect(barLeft, y + 4, Math.max(barW, 20), 20, 10).fill(color);
+      doc.roundedRect(barLeft, y + 2, Math.max(barW, 22), 22, 11).fill(color);
     }
 
     // 점수
     doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
-    doc.text(`${ms.score}`, barLeft + barMaxW + 10, y + 6);
+    doc.text(`${ms.score}`, barLeft + barMaxW + 10, y + 5);
 
-    // 설명 (십신 기반)
-    doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-    const desc = ms.tenGod ? `${ms.tenGod}의 기운` : '';
-    doc.text(desc, barLeft + barMaxW + 32, y + 8);
+    // 설명 (12운성 기반 의미있는 설명)
+    doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
+    doc.text(ms.desc, barLeft + barMaxW + 32, y + 7);
 
     // 등급 배지
     if (grade) {
-      const badgeColor = grade === '대길' ? '#5c2626' : '#c47d5e';
-      doc.roundedRect(barLeft + barMaxW + 95, y + 4, 36, 20, 10).fill(badgeColor);
+      const badgeColor = grade === '대길' ? '#2d6a4f' : '#8b3a3a';
+      doc.roundedRect(barLeft + barMaxW + 110, y + 2, 36, 22, 11).fill(badgeColor);
       doc.font(koreanBoldFont).fontSize(8).fillColor('#ffffff');
-      doc.text(grade, barLeft + barMaxW + 95, y + 9, { width: 36, align: 'center' });
+      doc.text(grade, barLeft + barMaxW + 110, y + 8, { width: 36, align: 'center' });
     }
 
     y += rowH;
   }
 
   // ─── 하단 요약 (연평균 / 최고 / 최저) ───
-  y += 12;
-  const avgScore = (monthScores.reduce((s, m) => s + m.score, 0) / monthScores.length).toFixed(1);
-  const bestMonth = monthScores.reduce((a, b) => a.score > b.score ? a : b);
-  const worstMonth = monthScores.reduce((a, b) => a.score < b.score ? a : b);
+  y += 10;
+  const avgScore = (sorted.reduce((s, m) => s + m.score, 0) / sorted.length).toFixed(1);
+  const bestMonth = sorted.reduce((a, b) => a.score > b.score ? a : b);
+  const worstMonth = sorted.reduce((a, b) => a.score < b.score ? a : b);
 
   const sumBoxW = (contentW - 16) / 3;
   // 연평균
@@ -2247,50 +2317,51 @@ function renderMonthFortunePage(doc: PDFKit.PDFDocument, result: SajuResult, kor
   doc.text(`${worstMonth.month}월 (${worstMonth.score}점)`, margin + (sumBoxW + 8) * 2, y + 24, { width: sumBoxW, align: 'center' });
 
   // ─── 행운의 달 / 주의할 달 박스 ───
-  y += 70;
+  y += 65;
   const halfW = (contentW - 16) / 2;
 
   // 행운의 달
-  doc.roundedRect(margin, y, halfW, 120, 8).fill('#ffffff');
-  doc.roundedRect(margin, y, halfW, 120, 8).strokeColor('#e8e5de').stroke();
-  doc.roundedRect(margin + 12, y + 10, 42, 18, 4).fill('#5c2626');
+  doc.roundedRect(margin, y, halfW, 110, 8).fill('#ffffff');
+  doc.roundedRect(margin, y, halfW, 110, 8).strokeColor('#2d6a4f').lineWidth(1.5).stroke();
+  doc.roundedRect(margin + 12, y + 10, 42, 18, 4).fill('#2d6a4f');
   doc.font(koreanBoldFont).fontSize(8).fillColor('#ffffff');
   doc.text('BEST', margin + 12, y + 14, { width: 42, align: 'center' });
   doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
   doc.text('행운의 달', margin + 62, y + 12);
 
-  const topMonths = [...monthScores].sort((a, b) => b.score - a.score).slice(0, 3);
-  let my = y + 40;
+  const topMonths = [...sorted].sort((a, b) => b.score - a.score).slice(0, 3);
+  let my = y + 38;
   for (const tm of topMonths) {
-    doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
+    doc.font(koreanBoldFont).fontSize(10).fillColor('#374151');
     doc.text(`${tm.month}월`, margin + 16, my);
-    doc.font(koreanBoldFont).fontSize(11).fillColor('#5c2626');
-    doc.text(`${tm.score}점`, margin + 55, my);
-    doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-    doc.text(tm.tenGod ? `${tm.tenGod}의 기운` : '', margin + 90, my + 1);
-    my += 24;
+    doc.font(koreanBoldFont).fontSize(10).fillColor('#2d6a4f');
+    doc.text(`${tm.score}점`, margin + 50, my);
+    doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
+    doc.text(tm.desc, margin + 85, my + 1);
+    my += 22;
   }
 
   // 주의할 달
-  doc.roundedRect(margin + halfW + 16, y, halfW, 120, 8).fill('#ffffff');
-  doc.roundedRect(margin + halfW + 16, y, halfW, 120, 8).strokeColor('#e8e5de').stroke();
-  doc.roundedRect(margin + halfW + 28, y + 10, 60, 18, 4).fill('#c47d5e');
+  doc.roundedRect(margin + halfW + 16, y, halfW, 110, 8).fill('#ffffff');
+  doc.roundedRect(margin + halfW + 16, y, halfW, 110, 8).strokeColor('#8b3a3a').lineWidth(1.5).stroke();
+  doc.roundedRect(margin + halfW + 28, y + 10, 60, 18, 4).fill('#8b3a3a');
   doc.font(koreanBoldFont).fontSize(8).fillColor('#ffffff');
   doc.text('CAUTION', margin + halfW + 28, y + 14, { width: 60, align: 'center' });
   doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
   doc.text('주의할 달', margin + halfW + 96, y + 12);
 
-  const bottomMonths = [...monthScores].sort((a, b) => a.score - b.score).slice(0, 3);
-  my = y + 40;
+  const bottomMonths = [...sorted].sort((a, b) => a.score - b.score).slice(0, 3);
+  my = y + 38;
   for (const bm of bottomMonths) {
-    doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
+    doc.font(koreanBoldFont).fontSize(10).fillColor('#374151');
     doc.text(`${bm.month}월`, margin + halfW + 32, my);
-    doc.font(koreanBoldFont).fontSize(11).fillColor('#c47d5e');
-    doc.text(`${bm.score}점`, margin + halfW + 71, my);
-    doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-    doc.text(bm.tenGod ? `${bm.tenGod}의 기운` : '', margin + halfW + 106, my + 1);
-    my += 24;
+    doc.font(koreanBoldFont).fontSize(10).fillColor('#8b3a3a');
+    doc.text(`${bm.score}점`, margin + halfW + 66, my);
+    doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
+    doc.text(bm.desc, margin + halfW + 101, my + 1);
+    my += 22;
   }
+  doc.lineWidth(1); // reset
 }
 
 function renderRawDataPage(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string) {

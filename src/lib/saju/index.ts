@@ -1,6 +1,6 @@
 // 사주 분석 통합 모듈
 
-export { calculateFourPillars, calculateElementDistribution, calculateTenGod, determineYongSin, calculateDaeUn } from './calculator';
+export { calculateFourPillars, calculateElementDistribution, calculateTenGod, calculateBranchTenGod, determineYongSin, calculateDaeUn } from './calculator';
 export { analyzeFortuneComplete } from './fortune';
 export { solarToLunar, lunarToSolar } from './calendar';
 export { solarToLunarKASI, lunarToSolarKASI, calculateFourPillarsKASI } from './manseryeok-bridge';
@@ -35,11 +35,11 @@ export {
   STEM_ELEMENT_KO,
 } from './constants';
 
-import { calculateFourPillars, calculateElementDistribution, calculateTenGod, determineYongSin, calculateDaeUn } from './calculator';
+import { calculateFourPillars, calculateElementDistribution, calculateTenGod, calculateBranchTenGod, determineYongSin, calculateDaeUn } from './calculator';
 import { analyzeFortuneComplete } from './fortune';
 import { calculateFourPillarsKASI } from './manseryeok-bridge';
 import { fetchAllFortunes } from './un7-api';
-import { HEAVENLY_STEMS, STEM_ELEMENT_KO, STEM_HANJA_TO_KO } from './constants';
+import { HEAVENLY_STEMS, EARTHLY_BRANCHES, STEM_ELEMENT_KO, STEM_HANJA_TO_KO } from './constants';
 import { analyzeStrength } from './strength';
 import { determineYongShinSystem } from './yongshin';
 import { calculateTwelveStages } from './twelve-stages';
@@ -67,10 +67,20 @@ export function analyzeSaju(birthInfo: BirthInfo): SajuResult {
   const monthStemIndex = HEAVENLY_STEMS.indexOf(fourPillars.month.heavenlyStem);
   const hourStemIndex = HEAVENLY_STEMS.indexOf(fourPillars.hour.heavenlyStem);
 
+  // 지지 십성 계산
+  const yearBranchIndex = EARTHLY_BRANCHES.indexOf(fourPillars.year.earthlyBranch);
+  const monthBranchIndex = EARTHLY_BRANCHES.indexOf(fourPillars.month.earthlyBranch);
+  const dayBranchIndex = EARTHLY_BRANCHES.indexOf(fourPillars.day.earthlyBranch);
+  const hourBranchIndex = EARTHLY_BRANCHES.indexOf(fourPillars.hour.earthlyBranch);
+
   const tenGods = {
     year: calculateTenGod(dayStemIndex, yearStemIndex) as TenGod,
     month: calculateTenGod(dayStemIndex, monthStemIndex) as TenGod,
     hour: calculateTenGod(dayStemIndex, hourStemIndex) as TenGod,
+    yearBranch: calculateBranchTenGod(dayStemIndex, yearBranchIndex) as TenGod,
+    monthBranch: calculateBranchTenGod(dayStemIndex, monthBranchIndex) as TenGod,
+    dayBranch: calculateBranchTenGod(dayStemIndex, dayBranchIndex) as TenGod,
+    hourBranch: calculateBranchTenGod(dayStemIndex, hourBranchIndex) as TenGod,
   };
 
   // 운세 분석

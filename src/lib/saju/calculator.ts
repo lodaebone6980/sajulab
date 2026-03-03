@@ -221,11 +221,40 @@ export function calculateElementDistribution(fourPillars: FourPillars): ElementD
   return dist;
 }
 
+// 지지의 정기(본기) → 천간 매핑
+// 각 지지마다 그 기본이 되는 천간 인덱스를 반환
+function getBranchMainStemIndex(branchIndex: number): number {
+  // EARTHLY_BRANCHES 순서: 子丑寅卯辰巳午未申酉戌亥 (0-11)
+  // HEAVENLY_STEMS 순서: 甲乙丙丁戊己庚辛壬癸 (0-9)
+  const branchMainStem = [
+    9,  // 子 → 癸 (index 9)
+    5,  // 丑 → 己 (index 5)
+    0,  // 寅 → 甲 (index 0)
+    1,  // 卯 → 乙 (index 1)
+    4,  // 辰 → 戊 (index 4)
+    2,  // 巳 → 丙 (index 2)
+    3,  // 午 → 丁 (index 3)
+    5,  // 未 → 己 (index 5)
+    6,  // 申 → 庚 (index 6)
+    7,  // 酉 → 辛 (index 7)
+    4,  // 戌 → 戊 (index 4)
+    8,  // 亥 → 壬 (index 8)
+  ];
+  return branchMainStem[branchIndex];
+}
+
 // 십성 계산 (일간 기준)
 export function calculateTenGod(dayStem: number, targetStem: number): string {
   const diff = ((targetStem - dayStem) % 10 + 10) % 10;
   const tenGods = ['비견', '겁재', '식신', '상관', '편재', '정재', '편관', '정관', '편인', '정인'];
   return tenGods[diff];
+}
+
+// 지지 십성 계산 (지지의 정기를 이용)
+// dayStemIndex: 일간 인덱스, branchIndex: 지지 인덱스
+export function calculateBranchTenGod(dayStemIndex: number, branchIndex: number): string {
+  const branchMainStemIndex = getBranchMainStemIndex(branchIndex);
+  return calculateTenGod(dayStemIndex, branchMainStemIndex);
 }
 
 // 용신 결정 (간략화 - 오행 균형 기반)
