@@ -507,16 +507,16 @@ function renderGreetingPageLarge(
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    doc.font(koreanFont).fontSize(14).fillColor('#374151');
-    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 12 });
+    doc.font(koreanFont).fontSize(16).fillColor('#374151');
+    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 18 });
 
     if (y + h > 720) {
       doc.addPage();
       y = 80;
     }
 
-    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 12 });
-    y += h + 20;
+    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 18 });
+    y += h + 24;
   }
 
   // 서명
@@ -566,11 +566,11 @@ function renderNarrativeChapterLarge(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 65;
+  const margin = 75;
   const contentWidth = width - margin * 2;
-  const fontSize = 14;
-  const lineGap = 14;
-  const pageBottom = 720;
+  const fontSize = 16;
+  const lineGap = 20;
+  const pageBottom = 700;
 
   // 상단 헤더 바
   doc.rect(0, 35, width, 2).fill('#d4af37');
