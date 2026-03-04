@@ -74,7 +74,7 @@ export async function generateNarrative(
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.7,
-      max_tokens: productCode === 'saju-basic' ? 6000 : productCode === 'saju-newyear' ? 16000 : 16000,
+      max_tokens: productCode === 'saju-basic' ? 6000 : productCode === 'saju-premium' ? 32000 : 16000,
       response_format: { type: 'json_object' },
     });
 
