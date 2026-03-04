@@ -91,6 +91,10 @@ function generatePdfKitFallback(
       const nanumRegularExists = fs.existsSync(FONT_NANUM_REGULAR);
       const nanumBoldExists = fs.existsSync(FONT_NANUM_BOLD);
 
+      // Font diagnostic logging
+      console.log(`[PDF] Font check: NotoSansKR-Regular=${notoRegularExists} (${notoRegularExists ? fs.statSync(FONT_REGULAR).size : 0}), Bold=${notoBoldExists} (${notoBoldExists ? fs.statSync(FONT_BOLD).size : 0})`);
+      console.log(`[PDF] Font check: NanumGothic-Regular=${nanumRegularExists}, Bold=${nanumBoldExists}`);
+
       if (notoRegularExists && notoBoldExists) {
         try {
           doc.registerFont('Korean', FONT_REGULAR);
@@ -946,7 +950,7 @@ function renderAnalysisGuidePage(
   let y = 135;
   const guideItems = [
     {
-      title: '사주팔자(四柱八字)란?',
+      title: '사주팔자란?',
       content: '사주팔자는 태어난 해, 달, 날, 시간을 네 개의 기둥(四柱)과 여덟 개의 글자(八字)로 나타낸 것입니다. 이 여덟 글자에는 당신의 타고난 성격, 재능, 인연, 그리고 인생의 흐름이 담겨 있습니다.',
     },
     {
@@ -1375,7 +1379,7 @@ function renderTableOfContents(doc: PDFKit.PDFDocument, result: SajuResult, opti
   drawSectionHeader(doc, '목 차', koreanBoldFont);
 
   const tocItems = [
-    { num: '01', label: '사주원국표 (四柱八字)', desc: '년주, 월주, 일주, 시주 분석' },
+    { num: '01', label: '사주원국표', desc: '년주, 월주, 일주, 시주 분석' },
     { num: '02', label: '음양오행 분포 (五行)', desc: '오행의 균형과 용신/기신 분석' },
     { num: '03', label: '성격 분석', desc: '일간의 기질과 성격 특성' },
     { num: '04', label: '직업운 분석', desc: '적합한 직업과 진로 방향' },
@@ -1729,12 +1733,12 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   if (yangW > 0) {
     doc.roundedRect(margin + 16, barY, yangW, barH, 12).fill('#c47d5e');
     doc.font(koreanBoldFont).fontSize(9).fillColor('#ffffff');
-    doc.text(`陽 양 ${yangCount}개 (${yangPct}%)`, margin + 16, barY + 7, { width: yangW, align: 'center' });
+    doc.text(`양(陽) ${yangCount}개 (${yangPct}%)`, margin + 16, barY + 7, { width: yangW, align: 'center' });
   }
   if (yinW > 20) {
     doc.roundedRect(margin + 16 + yangW, barY, yinW, barH, 12).fill('#4a4a6a');
     doc.font(koreanBoldFont).fontSize(9).fillColor('#ffffff');
-    doc.text(`陰 음 ${yinCount}개 (${yinPct}%)`, margin + 16 + yangW, barY + 7, { width: yinW, align: 'center' });
+    doc.text(`음(陰) ${yinCount}개 (${yinPct}%)`, margin + 16 + yangW, barY + 7, { width: yinW, align: 'center' });
   }
 
   // ─── 오행 분포도 박스 ───
