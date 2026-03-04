@@ -4,10 +4,14 @@ import {
   createOrder,
   getProducts,
   updateOrderStatus,
+  updateOrderResult,
   saveNarrative,
+  saveFortuneData,
   findUserByEmail,
+  getDb,
 } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
+import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
 import { generateSajuPdf } from '@/lib/pdf/generator';
 import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
 import path from 'path';
@@ -47,6 +51,37 @@ async function processOrder(
 
     updateOrderStatus(orderId, userId, 'analyzing');
 
+    // Save result_json
+    const resultJson = JSON.stringify(sajuResult);
+    updateOrderResult(orderId, userId, resultJson);
+
+    // Save fortune data (10 sections)
+    try {
+      const sections = convertSajuResultToSections(sajuResult, customerData.name, customerData.gender, customerData.calendarType);
+      const totalLines = countTotalLines(sections);
+      saveFortuneData(orderId, customerData.name, JSON.stringify(sajuResult.birthInfo), {
+        info: JSON.stringify(sections.info),
+        pillar: JSON.stringify(sections.pillar),
+        yongsin: JSON.stringify(sections.yongsin),
+        yinyang: JSON.stringify(sections.yinyang),
+        shinsal: JSON.stringify(sections.shinsal),
+        hyungchung: JSON.stringify(sections.hyungchung),
+        daeun: JSON.stringify(sections.daeun),
+        nyunun: JSON.stringify(sections.nyunun),
+        wolun: JSON.stringify(sections.wolun),
+        wolun2: JSON.stringify(sections.wolun2),
+      }, totalLines);
+    } catch (fdError) {
+      console.error(`[Seed] Fortune data save error for order ${orderId}:`, fdError);
+    }
+
+    // saju-data 상품은 PDF 생성 건너뛰기
+    if (product.code === 'saju-data') {
+      updateOrderStatus(orderId, userId, 'completed');
+      console.log(`[Seed] ✅ Order ${orderId} completed (${customerData.name} - ${product.code}) [data-only]`);
+      return;
+    }
+
     // Generate AI narrative (or fallback)
     let narrative = await generateNarrative(sajuResult, customerData.name, product.code);
     if (!narrative) {
@@ -80,6 +115,11 @@ async function processOrder(
     // Save PDF
     const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
     fs.writeFileSync(pdfPath, pdfBuffer);
+
+    // Save pdf_url to DB
+    const db = getDb();
+    db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+      .run(`/api/orders/${orderId}/pdf`, orderId, userId);
 
     updateOrderStatus(orderId, userId, 'completed');
     console.log(`[Seed] ✅ Order ${orderId} completed (${customerData.name} - ${product.code})`);
