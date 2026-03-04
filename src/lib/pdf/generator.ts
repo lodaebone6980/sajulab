@@ -1440,22 +1440,32 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
   doc.text('THE DESTINY CHART', 0, 78, { align: 'center', width });
 
-  // ─── 이름 + 생년월일 ───
+  // ─── 이름 + 생년월일 상세정보 (포스텔러 스타일) ───
   doc.font(koreanBoldFont).fontSize(13).fillColor('#374151');
   doc.text(`${result.birthInfo.gender === 'male' ? '남' : '여'} ${birthInfo.year}년생`, 0, 95, { align: 'center', width });
+
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+  const birthMonth = String(birthInfo.month).padStart(2, '0');
+  const birthDay = String(birthInfo.day).padStart(2, '0');
   doc.text(
-    `양력 ${birthInfo.year}년 ${String(birthInfo.month).padStart(2, '0')}월 ${String(birthInfo.day).padStart(2, '0')}일`,
-    0, 110, { align: 'center', width }
+    `양력 ${birthInfo.year}년 ${birthMonth}월 ${birthDay}일`,
+    0, 112, { align: 'center', width }
   );
-  doc.text(`출생시 ${fourPillars.hour.earthlyBranchKo}시`, 0, 124, { align: 'center', width });
+
+  // 출생시간 + 한국기준 -30분 반영 정보
+  const hourBranch = fourPillars.hour.earthlyBranchKo;
+  doc.text(`출생시 ${hourBranch}시 (${hourBranch}시 기준)`, 0, 126, { align: 'center', width });
+
+  // 한국 표준시 기준 설명
+  doc.font(koreanFont).fontSize(7.5).fillColor('#9ca3af');
+  doc.text('※ 한국 표준시(KST) 기준, 진태양시 -30분 보정 반영', 0, 140, { align: 'center', width });
 
   // ─── 테이블 설정 (forceteller 스타일 - 전체 페이지를 가득 채우기) ───
   const tableX = margin;
   const tableW = width - margin * 2;
   const labelColW = 65;
   const colW = (tableW - labelColW) / 4;
-  let ty = 150;
+  let ty = 158;
 
   const pillars = [
     { label: '시주', index: 0, pillar: fourPillars.hour, tenGod: tenGods.hour, life: '말년운/자녀운,결실' },
@@ -1498,12 +1508,30 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한글 + 한자 병기 (한글 위, 한자 아래 — 포스텔러 스타일)
-    doc.font(koreanBoldFont).fontSize(30).fillColor(stemColor);
-    doc.text(p.heavenlyStemKo, cellX, ty + 10, { width: colW, align: 'center' });
+    // 한글 + 한자 병기 (나란히 — 병丙 스타일)
+    const koText = p.heavenlyStemKo;
+    const hjText = p.heavenlyStem;
+    const koFontSize = 28;
+    const hjFontSize = 18;
 
-    doc.font(koreanFont).fontSize(16).fillColor(stemColor);
-    doc.text(p.heavenlyStem, cellX, ty + 48, { width: colW, align: 'center' });
+    // Measure widths
+    doc.font(koreanBoldFont).fontSize(koFontSize);
+    const koWidth = doc.widthOfString(koText);
+    doc.font(koreanFont).fontSize(hjFontSize);
+    const hjWidth = doc.widthOfString(hjText);
+
+    const totalW = koWidth + hjWidth + 2; // 2px gap
+    const startX = cellX + (colW - totalW) / 2;
+    const centerY = getCenteredTextY(ty, stemH, koFontSize);
+
+    // Korean
+    doc.font(koreanBoldFont).fontSize(koFontSize).fillColor(stemColor);
+    doc.text(koText, startX, centerY, { lineBreak: false });
+
+    // Hanja (baseline aligned but slightly lower due to smaller size)
+    doc.font(koreanFont).fontSize(hjFontSize).fillColor(stemColor);
+    const hjY = centerY + (koFontSize - hjFontSize) * 0.4; // align baselines roughly
+    doc.text(hjText, startX + koWidth + 2, hjY, { lineBreak: false });
 
     // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
@@ -1539,12 +1567,30 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한글 + 한자 병기 (한글 위, 한자 아래 — 포스텔러 스타일)
-    doc.font(koreanBoldFont).fontSize(30).fillColor(branchColor);
-    doc.text(p.earthlyBranchKo, cellX, ty + 10, { width: colW, align: 'center' });
+    // 한글 + 한자 병기 (나란히 — 병丙 스타일)
+    const koText = p.earthlyBranchKo;
+    const hjText = p.earthlyBranch;
+    const koFontSize = 28;
+    const hjFontSize = 18;
 
-    doc.font(koreanFont).fontSize(16).fillColor(branchColor);
-    doc.text(p.earthlyBranch, cellX, ty + 48, { width: colW, align: 'center' });
+    // Measure widths
+    doc.font(koreanBoldFont).fontSize(koFontSize);
+    const koWidth = doc.widthOfString(koText);
+    doc.font(koreanFont).fontSize(hjFontSize);
+    const hjWidth = doc.widthOfString(hjText);
+
+    const totalW = koWidth + hjWidth + 2; // 2px gap
+    const startX = cellX + (colW - totalW) / 2;
+    const centerY = getCenteredTextY(ty, branchH, koFontSize);
+
+    // Korean
+    doc.font(koreanBoldFont).fontSize(koFontSize).fillColor(branchColor);
+    doc.text(koText, startX, centerY, { lineBreak: false });
+
+    // Hanja (baseline aligned but slightly lower due to smaller size)
+    doc.font(koreanFont).fontSize(hjFontSize).fillColor(branchColor);
+    const hjY = centerY + (koFontSize - hjFontSize) * 0.4; // align baselines roughly
+    doc.text(hjText, startX + koWidth + 2, hjY, { lineBreak: false });
 
     // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
@@ -1731,12 +1777,12 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   if (yangW > 0) {
     doc.roundedRect(margin + 16, barY, yangW, barH, 12).fill('#c47d5e');
     doc.font(koreanBoldFont).fontSize(9).fillColor('#ffffff');
-    doc.text(`양(陽) ${yangCount}개 (${yangPct}%)`, margin + 16, barY + 7, { width: yangW, align: 'center' });
+    doc.text(`양(陽) ${yangCount}개 (${yangPct}%)`, margin + 16, getCenteredTextY(barY, barH, 9), { width: yangW, align: 'center' });
   }
   if (yinW > 20) {
     doc.roundedRect(margin + 16 + yangW, barY, yinW, barH, 12).fill('#4a4a6a');
     doc.font(koreanBoldFont).fontSize(9).fillColor('#ffffff');
-    doc.text(`음(陰) ${yinCount}개 (${yinPct}%)`, margin + 16 + yangW, barY + 7, { width: yinW, align: 'center' });
+    doc.text(`음(陰) ${yinCount}개 (${yinPct}%)`, margin + 16 + yangW, getCenteredTextY(barY, barH, 9), { width: yinW, align: 'center' });
   }
 
   // ─── 오행 분포도 박스 ───
@@ -1770,12 +1816,12 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
     // 한자 원형 아이콘 - 컬러 배경 + 흰색 텍스트 (forceteller 스타일)
     doc.circle(margin + 38, centerY, circleR).fill(el.color);
     doc.font(koreanBoldFont).fontSize(17).fillColor('#ffffff');
-    const circleTextY = centerY - 17 * 0.45;
+    const circleTextY = centerY - 17 * 0.55;
     doc.text(el.hanja, margin + 38 - circleR, circleTextY, { width: circleR * 2, align: 'center' });
 
     // 한글 레이블
     doc.font(koreanFont).fontSize(13).fillColor('#374151');
-    doc.text(el.label, margin + 64, centerY - 7, { width: 45 });
+    doc.text(el.label, margin + 64, centerY - 13 * 0.55, { width: 45 });
 
     // 바 배경 (둥근 끝)
     doc.roundedRect(barLeft, centerY - 13, barMaxW, 26, 13).fill('#e8e5de');
@@ -1786,7 +1832,7 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
       // 퍼센트 텍스트 (바 안에)
       if (pct > 8) {
         doc.font(koreanBoldFont).fontSize(10).fillColor('#ffffff');
-        const pctTextY = centerY - 10 * 0.45;
+        const pctTextY = centerY - 10 * 0.55;
         doc.text(`${pct}%`, barLeft, pctTextY, { width: Math.max(barW, 26), align: 'center' });
       }
     } else {
@@ -1797,7 +1843,7 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
 
     // 개수
     doc.font(koreanFont).fontSize(12).fillColor('#374151');
-    doc.text(`${el.value}개`, barLeft + barMaxW + 14, centerY - 7);
+    doc.text(`${el.value}개`, barLeft + barMaxW + 14, centerY - 12 * 0.55);
 
     ey += rowH;
   }
