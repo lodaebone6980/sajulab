@@ -69,7 +69,7 @@ function generatePdfKitFallback(
     try {
       const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 70, bottom: 70, left: 55, right: 55 },
+        margins: { top: 50, bottom: 50, left: 50, right: 50 },
         info: {
           Title: `사주분석서 - ${options.customerName}`,
           Author: '사주 분석 서비스',
@@ -512,34 +512,34 @@ function renderGreetingPageLarge(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 60;
+  const margin = 55;
   const contentWidth = width - margin * 2;
 
   // 타이틀
   doc.font(koreanBoldFont).fontSize(22).fillColor('#d4af37');
-  doc.text(`${customerName}님께`, 0, 80, { align: 'center', width });
+  doc.text(`${customerName}님께`, 0, 70, { align: 'center', width });
 
   // 장식선
-  doc.rect(width / 2 - 25, 112, 50, 2).fill('#d4af37');
+  doc.rect(width / 2 - 25, 100, 50, 2).fill('#d4af37');
 
-  // 인사말 본문 (적절한 크기)
-  let y = 135;
+  // 인사말 본문
+  let y = 120;
   const paragraphs = greeting.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 8 });
-    if (y + h > 720) { doc.addPage(); y = 80; }
-    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 8 });
-    y += h + 12;
+    doc.font(koreanFont).fontSize(12).fillColor('#374151');
+    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 10 });
+    if (y + h > 760) { doc.addPage(); y = 50; }
+    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 10 });
+    y += h + 10;
   }
 
   // 서명
   doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
-  doc.text('운명길잡이 드림', 0, y + 10, { align: 'right', width: width - margin });
+  doc.text('운명길잡이 드림', 0, y + 8, { align: 'right', width: width - margin });
 }
 
 // ─── 챕터 타이틀 페이지 (어두운 배경) ───
@@ -574,7 +574,7 @@ function renderChapterTitlePage(
   doc.rect(width / 2 - 40, height / 2 + 55, 80, 2).fill('#d4af37');
 }
 
-// ─── 큰 폰트 챕터 내러티브 렌더링 (16pt, 줄간격 2.0) ───
+// ─── 챕터 내러티브 렌더링 (sajulab.kr 스타일 - 밀도 높은 텍스트) ───
 
 function renderNarrativeChapterLarge(
   doc: PDFKit.PDFDocument,
@@ -583,11 +583,11 @@ function renderNarrativeChapterLarge(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 70;
+  const margin = 55;
   const contentWidth = width - margin * 2;
-  const fontSize = 14;      // sajulab.kr 기준 ~14pt
-  const lineGap = 22;       // sajulab.kr 기준 ~2x 행간 (더 넓게)
-  const pageBottom = 700;
+  const fontSize = 12.5;    // sajulab.kr 스타일 - 빽빽한 텍스트
+  const lineGap = 12;       // sajulab.kr 스타일 - 줄간격 최소화
+  const pageBottom = 760;   // 페이지 하단까지 꽉 채우기
 
   // 상단 헤더 바
   doc.rect(0, 35, width, 2).fill('#d4af37');
@@ -606,7 +606,7 @@ function renderNarrativeChapterLarge(
   for (const para of paragraphs) {
     const trimmed = para.trim();
     if (!trimmed) {
-      y += 18;
+      y += 8;  // 빈 줄 간격 최소화
       continue;
     }
 
@@ -616,40 +616,40 @@ function renderNarrativeChapterLarge(
     const isMonthHeader = /^\d{1,2}월/.test(trimmed) || /^[0-9]+월\s/.test(trimmed);
 
     if (isSubheading) {
-      y += 24;
-      if (y > pageBottom) { doc.addPage(); y = 70; }
-      doc.font(koreanBoldFont).fontSize(15).fillColor('#6b3a3a');
+      y += 14;
+      if (y > pageBottom) { doc.addPage(); y = 50; }
+      doc.font(koreanBoldFont).fontSize(13).fillColor('#6b3a3a');
       const subTitle = trimmed.replace(/[\[\]]/g, '');
-      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 8 });
-      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 8 });
-      y += h + 14;
+      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 6 });
+      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 6 });
+      y += h + 8;
     } else if (isMonthHeader) {
-      y += 20;
-      if (y > pageBottom) { doc.addPage(); y = 70; }
+      y += 10;
+      if (y > pageBottom) { doc.addPage(); y = 50; }
       // 월별 헤더 강조
-      doc.roundedRect(margin - 5, y - 5, contentWidth + 10, 30, 4).fill('#f5f0eb');
-      doc.font(koreanBoldFont).fontSize(13).fillColor('#5c3a2e');
-      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 4, { width: contentWidth });
-      y += 42;
+      doc.roundedRect(margin - 3, y - 3, contentWidth + 6, 24, 3).fill('#f5f0eb');
+      doc.font(koreanBoldFont).fontSize(11.5).fillColor('#5c3a2e');
+      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 3, { width: contentWidth });
+      y += 30;
       // 월별 본문
       const rest = trimmed.replace(/^[^\:\-–]+[\:\-–]\s*/, '');
       if (rest && rest !== trimmed) {
         doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
         const rh = doc.heightOfString(rest, { width: contentWidth, lineGap });
-        if (y + rh > pageBottom) { doc.addPage(); y = 70; }
+        if (y + rh > pageBottom) { doc.addPage(); y = 50; }
         doc.text(rest, margin, y, { width: contentWidth, lineGap });
-        y += rh + 18;
+        y += rh + 8;
       }
     } else if (isBoldLine) {
-      y += 12;
-      if (y > pageBottom) { doc.addPage(); y = 70; }
-      doc.font(koreanBoldFont).fontSize(12).fillColor('#374151');
-      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 10 });
-      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 10 });
-      y += h + 12;
+      y += 6;
+      if (y > pageBottom) { doc.addPage(); y = 50; }
+      doc.font(koreanBoldFont).fontSize(11.5).fillColor('#374151');
+      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 6 });
+      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 6 });
+      y += h + 6;
     } else {
-      // 일반 본문 (큰 폰트 + 넓은 줄간격)
-      if (y > pageBottom) { doc.addPage(); y = 70; }
+      // 일반 본문 (sajulab.kr 스타일 - 빽빽한 텍스트)
+      if (y > pageBottom) { doc.addPage(); y = 50; }
 
       doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
       const textHeight = doc.heightOfString(trimmed, { width: contentWidth, lineGap });
@@ -666,7 +666,7 @@ function renderNarrativeChapterLarge(
           if (y + testH > pageBottom && currentText) {
             doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
             doc.addPage();
-            y = 70;
+            y = 50;
             currentText = sentence;
           } else {
             currentText = test;
@@ -676,11 +676,11 @@ function renderNarrativeChapterLarge(
         if (currentText.trim()) {
           const h = doc.heightOfString(currentText.trim(), { width: contentWidth, lineGap });
           doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
-          y += h + 20;
+          y += h + 8;
         }
       } else {
         doc.text(trimmed, margin, y, { width: contentWidth, lineGap });
-        y += textHeight + 20;
+        y += textHeight + 8;
       }
     }
   }
