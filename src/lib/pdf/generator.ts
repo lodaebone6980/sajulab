@@ -536,23 +536,23 @@ function renderGreetingPageLarge(
   doc.rect(width / 2 - 25, 100, 50, 2).fill('#d4af37');
 
   // 인사말 본문
-  let y = 120;
+  let y = 130;
   const paragraphs = greeting.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    doc.font(koreanFont).fontSize(12).fillColor('#374151');
-    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 10 });
-    if (y + h > 760) { doc.addPage(); y = 50; }
-    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 10 });
-    y += h + 10;
+    doc.font(koreanFont).fontSize(14).fillColor('#374151');
+    const h = doc.heightOfString(' ' + trimmed, { width: contentWidth, lineGap: 20 });
+    if (y + h > 740) { doc.addPage(); y = 50; }
+    doc.text(' ' + trimmed, margin, y, { width: contentWidth, lineGap: 20 });
+    y += h + 18;
   }
 
   // 서명
-  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
-  doc.text('운명길잡이 드림', 0, y + 8, { align: 'right', width: width - margin });
+  doc.font(koreanFont).fontSize(12).fillColor('#6b7280');
+  doc.text('운명길잡이 드림', 0, y + 12, { align: 'right', width: width - margin });
 }
 
 // ─── 챕터 타이틀 페이지 (어두운 배경) ───
@@ -596,11 +596,13 @@ function renderNarrativeChapterLarge(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 55;
+  const margin = 60;
   const contentWidth = width - margin * 2;
-  const fontSize = 11.5;    // sajulab.kr 스타일
-  const lineGap = 17;       // 가독성 + 페이지 수 확보 (14→17)
-  const pageBottom = 750;   // 하단 여백 약간 여유
+  const fontSize = 14;      // sajulab.kr 스타일 (큰 글씨)
+  const lineGap = 22;       // sajulab.kr 스타일 (넓은 행간)
+  const paraGap = 22;       // 문단 사이 간격
+  const indent = 10;        // 문단 첫줄 들여쓰기
+  const pageBottom = 740;   // 하단 여백
 
   // 상단 헤더 바
   doc.rect(0, 35, width, 2).fill('#d4af37');
@@ -619,7 +621,7 @@ function renderNarrativeChapterLarge(
   for (const para of paragraphs) {
     const trimmed = para.trim();
     if (!trimmed) {
-      y += 16;  // 빈 줄 간격 최소화
+      y += 10;  // 빈 줄 간격
       continue;
     }
 
@@ -629,51 +631,55 @@ function renderNarrativeChapterLarge(
     const isMonthHeader = /^\d{1,2}월/.test(trimmed) || /^[0-9]+월\s/.test(trimmed);
 
     if (isSubheading) {
-      y += 22;
+      y += 28;
       if (y > pageBottom) { doc.addPage(); y = 50; }
-      doc.font(koreanBoldFont).fontSize(13).fillColor('#6b3a3a');
+      doc.font(koreanBoldFont).fontSize(16).fillColor('#6b3a3a');
       const subTitle = trimmed.replace(/[\[\]]/g, '');
-      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 6 });
-      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 6 });
-      y += h + 14;
+      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 8 });
+      doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 8 });
+      y += h + 18;
     } else if (isMonthHeader) {
-      y += 16;
+      y += 20;
       if (y > pageBottom) { doc.addPage(); y = 50; }
       // 월별 헤더 강조
-      doc.roundedRect(margin - 3, y - 3, contentWidth + 6, 24, 3).fill('#f5f0eb');
-      doc.font(koreanBoldFont).fontSize(11.5).fillColor('#5c3a2e');
-      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 3, { width: contentWidth });
-      y += 30;
+      doc.roundedRect(margin - 3, y - 4, contentWidth + 6, 30, 3).fill('#f5f0eb');
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
+      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 4, { width: contentWidth });
+      y += 36;
       // 월별 본문
       const rest = trimmed.replace(/^[^\:\-–]+[\:\-–]\s*/, '');
       if (rest && rest !== trimmed) {
         doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
-        const rh = doc.heightOfString(rest, { width: contentWidth, lineGap });
+        const rh = doc.heightOfString(rest, { width: contentWidth - indent, lineGap });
         if (y + rh > pageBottom) { doc.addPage(); y = 50; }
-        doc.text(rest, margin, y, { width: contentWidth, lineGap });
-        y += rh + 12;
+        doc.text(rest, margin + indent, y, { width: contentWidth - indent, lineGap });
+        y += rh + paraGap;
       }
     } else if (isBoldLine) {
-      y += 6;
+      y += 8;
       if (y > pageBottom) { doc.addPage(); y = 50; }
-      doc.font(koreanBoldFont).fontSize(11.5).fillColor('#374151');
-      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 6 });
-      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 6 });
-      y += h + 10;
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#374151');
+      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 8 });
+      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 8 });
+      y += h + 14;
     } else {
-      // 일반 본문 (sajulab.kr 스타일 - 빽빽한 텍스트)
+      // 일반 본문 (sajulab.kr 스타일 - 큰 글씨 + 넓은 행간 + 들여쓰기)
       if (y > pageBottom) { doc.addPage(); y = 50; }
 
+      // 첫 줄 들여쓰기 적용
+      const indentedText = ' ' + trimmed;
       doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
-      const textHeight = doc.heightOfString(trimmed, { width: contentWidth, lineGap });
+      const textHeight = doc.heightOfString(indentedText, { width: contentWidth, lineGap });
 
       if (y + textHeight > pageBottom) {
         // 긴 텍스트 - 문장 단위로 분할
         const sentences = trimmed.match(/[^.!?。]+[.!?。]?\s*/g) || [trimmed];
         let currentText = '';
+        let isFirst = true;
 
         for (const sentence of sentences) {
-          const test = currentText + sentence;
+          const prefix = isFirst ? ' ' : '';
+          const test = currentText + (currentText ? '' : prefix) + sentence;
           const testH = doc.heightOfString(test, { width: contentWidth, lineGap });
 
           if (y + testH > pageBottom && currentText) {
@@ -681,6 +687,7 @@ function renderNarrativeChapterLarge(
             doc.addPage();
             y = 50;
             currentText = sentence;
+            isFirst = false;
           } else {
             currentText = test;
           }
@@ -689,11 +696,11 @@ function renderNarrativeChapterLarge(
         if (currentText.trim()) {
           const h = doc.heightOfString(currentText.trim(), { width: contentWidth, lineGap });
           doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
-          y += h + 12;
+          y += h + paraGap;
         }
       } else {
-        doc.text(trimmed, margin, y, { width: contentWidth, lineGap });
-        y += textHeight + 12;
+        doc.text(indentedText, margin, y, { width: contentWidth, lineGap });
+        y += textHeight + paraGap;
       }
     }
   }
