@@ -6,13 +6,14 @@ import type { NarrativeResult } from '@/lib/ai';
 import { generateSajuPdfFromHtml } from './html-to-pdf';
 
 const FONTS_DIR = path.join(process.cwd(), 'fonts');
-// Pretendard: 행간이 타이트한 한국 표준 디자인 폰트 (sajulab.kr 스타일)
-// NotoSansKR 대비 17.6% 컴팩트한 vertical metrics → 행간/여백 문제 해결
-const FONT_PRETENDARD_REGULAR = path.join(FONTS_DIR, 'Pretendard-Regular.otf');
-const FONT_PRETENDARD_BOLD = path.join(FONTS_DIR, 'Pretendard-Bold.otf');
-// NotoSansKR: 한자(CJK) 지원 폴백
+// GmarketSans: 넓은 자간, 깔끔한 디자인 (사용자 요청)
+const FONT_GMARKET_MEDIUM = path.join(FONTS_DIR, 'GmarketSansMedium.ttf');
+// NotoSansKR: 한자(CJK) 지원 + Bold 폰트
 const FONT_REGULAR = path.join(FONTS_DIR, 'NotoSansKR-Regular.ttf');
 const FONT_BOLD = path.join(FONTS_DIR, 'NotoSansKR-Bold.ttf');
+// Pretendard 폴백
+const FONT_PRETENDARD_REGULAR = path.join(FONTS_DIR, 'Pretendard-Regular.otf');
+const FONT_PRETENDARD_BOLD = path.join(FONTS_DIR, 'Pretendard-Bold.otf');
 // NanumGothic 폴백
 const FONT_NANUM_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
 const FONT_NANUM_BOLD = path.join(FONTS_DIR, 'NanumGothic-Bold.ttf');
@@ -86,59 +87,74 @@ function generatePdfKitFallback(
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Pretendard(한글/라틴) + NotoSansKR(한자 전용) 이중 폰트 전략
+      // GmarketSans(한글/라틴) + NotoSansKR(한자/Bold) 이중 폰트 전략
       let koreanFont = 'Helvetica';
       let koreanBoldFont = 'Helvetica-Bold';
       let hanjaFont = 'Helvetica';        // 한자 전용 폰트
       let hanjaBoldFont = 'Helvetica-Bold';
 
-      const pretendardRegularExists = fs.existsSync(FONT_PRETENDARD_REGULAR);
-      const pretendardBoldExists = fs.existsSync(FONT_PRETENDARD_BOLD);
+      const gmarketExists = fs.existsSync(FONT_GMARKET_MEDIUM);
       const notoRegularExists = fs.existsSync(FONT_REGULAR);
       const notoBoldExists = fs.existsSync(FONT_BOLD);
+      const pretendardRegularExists = fs.existsSync(FONT_PRETENDARD_REGULAR);
+      const pretendardBoldExists = fs.existsSync(FONT_PRETENDARD_BOLD);
       const nanumRegularExists = fs.existsSync(FONT_NANUM_REGULAR);
       const nanumBoldExists = fs.existsSync(FONT_NANUM_BOLD);
 
-      console.log(`[PDF] Font check: Pretendard=${pretendardRegularExists}/${pretendardBoldExists}, NotoSansKR=${notoRegularExists}/${notoBoldExists}, NanumGothic=${nanumRegularExists}/${nanumBoldExists}`);
+      console.log(`[PDF] Font check: GmarketSans=${gmarketExists}, NotoSansKR=${notoRegularExists}/${notoBoldExists}, Pretendard=${pretendardRegularExists}/${pretendardBoldExists}`);
 
       let fontRegistered = false;
 
-      // 1순위: Pretendard (행간 타이트, 한글+라틴 완벽)
-      if (pretendardRegularExists && pretendardBoldExists) {
-        try {
-          doc.registerFont('Korean', FONT_PRETENDARD_REGULAR);
-          doc.registerFont('KoreanBold', FONT_PRETENDARD_BOLD);
-          koreanFont = 'Korean';
-          koreanBoldFont = 'KoreanBold';
-          fontRegistered = true;
-          console.log('[PDF] Pretendard 폰트 등록 성공 (컴팩트 행간)');
-        } catch (err) {
-          console.warn('[PDF] Pretendard 등록 실패:', err);
-        }
-      }
-
-      // 한자(CJK) 전용 폰트: NotoSansKR (Pretendard에 한자 글리프 없음)
+      // 한자(CJK) 전용 + Bold 폰트: NotoSansKR (항상 먼저 등록)
       if (notoRegularExists && notoBoldExists) {
         try {
           doc.registerFont('Hanja', FONT_REGULAR);
           doc.registerFont('HanjaBold', FONT_BOLD);
           hanjaFont = 'Hanja';
           hanjaBoldFont = 'HanjaBold';
-          console.log('[PDF] NotoSansKR 한자 전용 폰트 등록 성공');
-
-          // Pretendard가 없으면 NotoSansKR을 메인 폰트로도 사용
-          if (!fontRegistered) {
-            koreanFont = 'Hanja';
-            koreanBoldFont = 'HanjaBold';
-            fontRegistered = true;
-            console.log('[PDF] NotoSansKR을 메인 폰트로 사용 (Pretendard 없음)');
-          }
+          console.log('[PDF] NotoSansKR 한자/Bold 폰트 등록 성공');
         } catch (err) {
           console.warn('[PDF] NotoSansKR 등록 실패:', err);
         }
       }
 
-      // 3순위: NanumGothic
+      // 1순위: GmarketSans Medium (넓은 자간, 깔끔한 디자인)
+      if (gmarketExists) {
+        try {
+          doc.registerFont('Korean', FONT_GMARKET_MEDIUM);
+          koreanFont = 'Korean';
+          // Bold는 NotoSansKR Bold 사용 (GmarketSans Bold 미보유)
+          koreanBoldFont = hanjaBoldFont !== 'Helvetica-Bold' ? hanjaBoldFont : 'Korean';
+          fontRegistered = true;
+          console.log('[PDF] GmarketSans Medium 폰트 등록 성공');
+        } catch (err) {
+          console.warn('[PDF] GmarketSans 등록 실패:', err);
+        }
+      }
+
+      // 2순위: Pretendard
+      if (!fontRegistered && pretendardRegularExists && pretendardBoldExists) {
+        try {
+          doc.registerFont('Korean', FONT_PRETENDARD_REGULAR);
+          doc.registerFont('KoreanBold', FONT_PRETENDARD_BOLD);
+          koreanFont = 'Korean';
+          koreanBoldFont = 'KoreanBold';
+          fontRegistered = true;
+          console.log('[PDF] Pretendard 폰트 등록 (폴백)');
+        } catch (err) {
+          console.warn('[PDF] Pretendard 등록 실패:', err);
+        }
+      }
+
+      // 3순위: NotoSansKR을 메인으로
+      if (!fontRegistered && hanjaFont !== 'Helvetica') {
+        koreanFont = hanjaFont;
+        koreanBoldFont = hanjaBoldFont;
+        fontRegistered = true;
+        console.log('[PDF] NotoSansKR을 메인 폰트로 사용');
+      }
+
+      // 4순위: NanumGothic
       if (!fontRegistered && nanumRegularExists && nanumBoldExists) {
         try {
           doc.registerFont('Korean', FONT_NANUM_REGULAR);
@@ -1524,8 +1540,8 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   }
   ty += 18;
 
-  // ─── 천간 행 ───
-  const stemH = 80;
+  // ─── 천간 행 (포스텔러 스타일: 한자 크게 + 한글 아래) ───
+  const stemH = 90;
   doc.rect(tableX, ty, tableW, stemH).fill('#ffffff');
   doc.rect(tableX, ty, tableW, stemH).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
@@ -1536,21 +1552,21 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한자 크게 (셀 중앙 위쪽) - NotoSansKR(한자 전용) 사용
-    const hanjaFontSize = 30;
-    const hanjaY = ty + 12;
+    // 한자 크게 (셀 중앙) - NotoSansKR(한자 전용) 사용
+    const hanjaFontSize = 34;
+    const hanjaY = ty + 10;
     doc.font(hanjaBoldFont).fontSize(hanjaFontSize).fillColor(stemColor);
     doc.text(p.heavenlyStem, cellX, hanjaY, { width: colW, align: 'center', lineBreak: false });
 
-    // 한글 읽기 (한자 아래에 명확히 분리)
-    doc.font(koreanFont).fontSize(11).fillColor(stemColor);
-    doc.text(p.heavenlyStemKo, cellX, hanjaY + hanjaFontSize + 4, { width: colW, align: 'center' });
+    // 한글 읽기 (한자 아래, 포스텔러 스타일)
+    doc.font(koreanFont).fontSize(12).fillColor(stemColor);
+    doc.text(p.heavenlyStemKo, cellX, hanjaY + hanjaFontSize + 6, { width: colW, align: 'center' });
 
     // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
     const yinYangMark = isYang ? '+' : '-';
     doc.font(koreanFont).fontSize(8).fillColor('#9ca3af');
-    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 30, ty + stemH - 13, { width: 26, align: 'center' });
+    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 32, ty + stemH - 14, { width: 28, align: 'center' });
   }
   ty += stemH;
 
@@ -1567,8 +1583,8 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   }
   ty += tenGodStemH;
 
-  // ─── 지지 행 ───
-  const branchH = 80;
+  // ─── 지지 행 (포스텔러 스타일: 한자 크게 + 한글 아래) ───
+  const branchH = 90;
   doc.rect(tableX, ty, tableW, branchH).fill('#ffffff');
   doc.rect(tableX, ty, tableW, branchH).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
@@ -1579,21 +1595,21 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한자 크게 (셀 중앙 위쪽) - NotoSansKR(한자 전용) 사용
-    const hanjaFontSize = 30;
-    const hanjaY = ty + 12;
+    // 한자 크게 (셀 중앙) - NotoSansKR(한자 전용) 사용
+    const hanjaFontSize = 34;
+    const hanjaY = ty + 10;
     doc.font(hanjaBoldFont).fontSize(hanjaFontSize).fillColor(branchColor);
     doc.text(p.earthlyBranch, cellX, hanjaY, { width: colW, align: 'center', lineBreak: false });
 
-    // 한글 읽기 (한자 아래에 명확히 분리)
-    doc.font(koreanFont).fontSize(11).fillColor(branchColor);
-    doc.text(p.earthlyBranchKo, cellX, hanjaY + hanjaFontSize + 4, { width: colW, align: 'center' });
+    // 한글 읽기 (한자 아래, 포스텔러 스타일)
+    doc.font(koreanFont).fontSize(12).fillColor(branchColor);
+    doc.text(p.earthlyBranchKo, cellX, hanjaY + hanjaFontSize + 6, { width: colW, align: 'center' });
 
     // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
     const yinYangMark = isYang ? '+' : '-';
     doc.font(koreanFont).fontSize(8).fillColor('#9ca3af');
-    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 30, ty + branchH - 13, { width: 26, align: 'center' });
+    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 32, ty + branchH - 14, { width: 28, align: 'center' });
   }
   ty += branchH;
 
