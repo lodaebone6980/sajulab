@@ -87,80 +87,48 @@ function generatePdfKitFallback(
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // GmarketSans(한글/라틴) + NotoSansKR(한자/Bold) 이중 폰트 전략
+      // NotoSansKR 통합 폰트 전략 (포스텔러 동일 폰트)
       let koreanFont = 'Helvetica';
       let koreanBoldFont = 'Helvetica-Bold';
-      let hanjaFont = 'Helvetica';        // 한자 전용 폰트
+      let hanjaFont = 'Helvetica';
       let hanjaBoldFont = 'Helvetica-Bold';
 
-      const gmarketExists = fs.existsSync(FONT_GMARKET_MEDIUM);
       const notoRegularExists = fs.existsSync(FONT_REGULAR);
       const notoBoldExists = fs.existsSync(FONT_BOLD);
-      const pretendardRegularExists = fs.existsSync(FONT_PRETENDARD_REGULAR);
-      const pretendardBoldExists = fs.existsSync(FONT_PRETENDARD_BOLD);
       const nanumRegularExists = fs.existsSync(FONT_NANUM_REGULAR);
       const nanumBoldExists = fs.existsSync(FONT_NANUM_BOLD);
 
-      console.log(`[PDF] Font check: GmarketSans=${gmarketExists}, NotoSansKR=${notoRegularExists}/${notoBoldExists}, Pretendard=${pretendardRegularExists}/${pretendardBoldExists}`);
+      console.log(`[PDF] Font check: NotoSansKR=${notoRegularExists}/${notoBoldExists}`);
 
       let fontRegistered = false;
 
-      // 한자(CJK) 전용 + Bold 폰트: NotoSansKR (항상 먼저 등록)
+      // 1순위: NotoSansKR (포스텔러 동일 폰트, 한글+한자+라틴 모두 지원)
       if (notoRegularExists && notoBoldExists) {
         try {
+          doc.registerFont('Korean', FONT_REGULAR);
+          doc.registerFont('KoreanBold', FONT_BOLD);
           doc.registerFont('Hanja', FONT_REGULAR);
           doc.registerFont('HanjaBold', FONT_BOLD);
+          koreanFont = 'Korean';
+          koreanBoldFont = 'KoreanBold';
           hanjaFont = 'Hanja';
           hanjaBoldFont = 'HanjaBold';
-          console.log('[PDF] NotoSansKR 한자/Bold 폰트 등록 성공');
+          fontRegistered = true;
+          console.log('[PDF] NotoSansKR 폰트 등록 성공 (포스텔러 스타일)');
         } catch (err) {
           console.warn('[PDF] NotoSansKR 등록 실패:', err);
         }
       }
 
-      // 1순위: GmarketSans Medium (넓은 자간, 깔끔한 디자인)
-      if (gmarketExists) {
-        try {
-          doc.registerFont('Korean', FONT_GMARKET_MEDIUM);
-          koreanFont = 'Korean';
-          // Bold는 NotoSansKR Bold 사용 (GmarketSans Bold 미보유)
-          koreanBoldFont = hanjaBoldFont !== 'Helvetica-Bold' ? hanjaBoldFont : 'Korean';
-          fontRegistered = true;
-          console.log('[PDF] GmarketSans Medium 폰트 등록 성공');
-        } catch (err) {
-          console.warn('[PDF] GmarketSans 등록 실패:', err);
-        }
-      }
-
-      // 2순위: Pretendard
-      if (!fontRegistered && pretendardRegularExists && pretendardBoldExists) {
-        try {
-          doc.registerFont('Korean', FONT_PRETENDARD_REGULAR);
-          doc.registerFont('KoreanBold', FONT_PRETENDARD_BOLD);
-          koreanFont = 'Korean';
-          koreanBoldFont = 'KoreanBold';
-          fontRegistered = true;
-          console.log('[PDF] Pretendard 폰트 등록 (폴백)');
-        } catch (err) {
-          console.warn('[PDF] Pretendard 등록 실패:', err);
-        }
-      }
-
-      // 3순위: NotoSansKR을 메인으로
-      if (!fontRegistered && hanjaFont !== 'Helvetica') {
-        koreanFont = hanjaFont;
-        koreanBoldFont = hanjaBoldFont;
-        fontRegistered = true;
-        console.log('[PDF] NotoSansKR을 메인 폰트로 사용');
-      }
-
-      // 4순위: NanumGothic
+      // 2순위: NanumGothic
       if (!fontRegistered && nanumRegularExists && nanumBoldExists) {
         try {
           doc.registerFont('Korean', FONT_NANUM_REGULAR);
           doc.registerFont('KoreanBold', FONT_NANUM_BOLD);
           koreanFont = 'Korean';
           koreanBoldFont = 'KoreanBold';
+          hanjaFont = 'Korean';
+          hanjaBoldFont = 'KoreanBold';
           fontRegistered = true;
           console.log('[PDF] NanumGothic 폰트 등록');
         } catch (err) {
@@ -1473,107 +1441,111 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   const { fourPillars, tenGods, birthInfo } = result;
   const margin = 40;
 
-  // ─── 헤더 (포스텔러 스타일 - 한 줄씩 명확하게 분리) ───
+  // ─── 헤더 (포스텔러 스타일 - 충분한 행간) ───
   let hy = 45;
   doc.font(koreanBoldFont).fontSize(22).fillColor('#1f2937');
   doc.text('사주원국표', 0, hy, { align: 'center', width });
-  hy += 30;
+  hy += 34;
 
   doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
   doc.text('THE DESTINY CHART', 0, hy, { align: 'center', width });
-  hy += 20;
+  hy += 24;
 
   // 이름 + 성별
   const genderText = result.birthInfo.gender === 'male' ? '남' : '여';
   doc.font(koreanBoldFont).fontSize(14).fillColor('#374151');
   doc.text(`${options.customerName} (${genderText})`, 0, hy, { align: 'center', width });
-  hy += 22;
+  hy += 26;
 
   // 생년월일
   const birthMonth = String(birthInfo.month).padStart(2, '0');
   const birthDay = String(birthInfo.day).padStart(2, '0');
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text(`양력 ${birthInfo.year}년 ${birthMonth}월 ${birthDay}일`, 0, hy, { align: 'center', width });
-  hy += 15;
+  hy += 18;
 
   // 출생시간
   const hourBranch = fourPillars.hour.earthlyBranchKo;
   doc.text(`출생시 ${hourBranch}시`, 0, hy, { align: 'center', width });
-  hy += 15;
+  hy += 18;
 
   // 한국 표준시 기준 설명
   doc.font(koreanFont).fontSize(7.5).fillColor('#9ca3af');
   doc.text('※ 한국 표준시(KST) 기준, 진태양시 -30분 보정 반영', 0, hy, { align: 'center', width });
 
-  // ─── 테이블 설정 (forceteller 스타일 - 전체 페이지를 가득 채우기) ───
+  // ─── 테이블 설정 (forceteller 스타일) ───
   const tableX = margin;
   const tableW = width - margin * 2;
   const labelColW = 65;
   const colW = (tableW - labelColW) / 4;
-  let ty = hy + 18;
+  let ty = hy + 28;
 
   const pillars = [
-    { label: '시주', index: 0, pillar: fourPillars.hour, tenGod: tenGods.hour, life: '말년운/자녀운,결실' },
-    { label: '일주', index: 1, pillar: fourPillars.day, tenGod: '일간(나)', life: '중년운/정체성,자아' },
-    { label: '월주', index: 2, pillar: fourPillars.month, tenGod: tenGods.month, life: '청년운/부모,사회상' },
-    { label: '년주', index: 3, pillar: fourPillars.year, tenGod: tenGods.year, life: '초년운/조상,시대상' },
+    { label: '생시', index: 0, pillar: fourPillars.hour, tenGod: tenGods.hour, life: '말년운/자녀운,결실' },
+    { label: '생일', index: 1, pillar: fourPillars.day, tenGod: '일간(나)', life: '중년운/정체성,자아' },
+    { label: '생월', index: 2, pillar: fourPillars.month, tenGod: tenGods.month, life: '청년운/부모,사회상' },
+    { label: '생년', index: 3, pillar: fourPillars.year, tenGod: tenGods.year, life: '초년운/조상,시대상' },
   ];
 
-  // 테이블 헤더 (구분)
-  doc.rect(tableX, ty, tableW, 30).fill('#f3f0ed');
-  doc.rect(tableX, ty, tableW, 30).strokeColor('#d1d5db').stroke();
-  doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
-  const headerY = getCenteredTextY(ty, 30, 11);
-  doc.text('구분', tableX, headerY, { width: labelColW, align: 'center' });
+  // 테이블 헤더 (포스텔러 스타일)
+  const headerH = 28;
+  doc.rect(tableX, ty, tableW, headerH).fill('#f9f8f6');
+  doc.rect(tableX, ty, tableW, headerH).strokeColor('#e5e2dd').stroke();
+  doc.font(koreanFont).fontSize(10).fillColor('#9ca3af');
+  const headerY = getCenteredTextY(ty, headerH, 10);
   for (let i = 0; i < 4; i++) {
-    doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
     doc.text(pillars[i].label, tableX + labelColW + i * colW, headerY, { width: colW, align: 'center' });
   }
-  ty += 30;
+  ty += headerH;
 
-  // 선택적: 개념 레이블 행 (운세 관련 설명)
-  doc.rect(tableX, ty, tableW, 18).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, 18).strokeColor('#d1d5db').stroke();
-  doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
-  for (let i = 0; i < 4; i++) {
-    doc.text(pillars[i].life, tableX + labelColW + i * colW, ty + 5, { width: colW - 4, align: 'center' });
-  }
-  ty += 18;
-
-  // ─── 천간 행 (포스텔러 스타일: 한자 크게 + 한글 아래) ───
-  const stemH = 90;
+  // ─── 천간 행 (포스텔러 스타일: 한글 크게 + 한자 옆에) ───
+  const stemH = 80;
   doc.rect(tableX, ty, tableW, stemH).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, stemH).strokeColor('#d1d5db').stroke();
-  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+  doc.rect(tableX, ty, tableW, stemH).strokeColor('#e5e2dd').stroke();
+  doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
   doc.text('천간', tableX, getCenteredTextY(ty, stemH, 9), { width: labelColW, align: 'center' });
 
   for (let i = 0; i < 4; i++) {
     const p = pillars[i].pillar;
     const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
+    const cellCenterX = cellX + colW / 2;
 
-    // 한자 크게 (셀 중앙) - NotoSansKR(한자 전용) 사용
-    const hanjaFontSize = 34;
-    const hanjaY = ty + 10;
-    doc.font(hanjaBoldFont).fontSize(hanjaFontSize).fillColor(stemColor);
-    doc.text(p.heavenlyStem, cellX, hanjaY, { width: colW, align: 'center', lineBreak: false });
+    // 한글 크게 + 한자 작게 (같은 줄, 나란히) - 포스텔러 스타일
+    const koText = p.heavenlyStemKo;
+    const hjText = p.heavenlyStem;
+    const koFontSize = 28;
+    const hjFontSize = 18;
 
-    // 한글 읽기 (한자 아래, 포스텔러 스타일)
-    doc.font(koreanFont).fontSize(12).fillColor(stemColor);
-    doc.text(p.heavenlyStemKo, cellX, hanjaY + hanjaFontSize + 6, { width: colW, align: 'center' });
+    // 한글+한자 조합 폭 계산
+    doc.font(koreanBoldFont).fontSize(koFontSize);
+    const koWidth = doc.widthOfString(koText);
+    doc.font(hanjaFont).fontSize(hjFontSize);
+    const hjWidth = doc.widthOfString(hjText);
+    const totalWidth = koWidth + hjWidth + 2;
+    const startX = cellCenterX - totalWidth / 2;
+    const textY = ty + 14;
 
-    // 음양+오행 표시 (우측 하단)
+    // 한글 (크고 굵게)
+    doc.font(koreanBoldFont).fontSize(koFontSize).fillColor(stemColor);
+    doc.text(koText, startX, textY, { lineBreak: false });
+
+    // 한자 (작게, 한글 옆)
+    doc.font(hanjaFont).fontSize(hjFontSize).fillColor(stemColor);
+    doc.text(hjText, startX + koWidth + 2, textY + (koFontSize - hjFontSize), { lineBreak: false });
+
+    // 음양+오행 표시 (중앙 아래)
     const isYang = p.yinYangKo === '양';
     const yinYangMark = isYang ? '+' : '-';
-    doc.font(koreanFont).fontSize(8).fillColor('#9ca3af');
-    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 32, ty + stemH - 14, { width: 28, align: 'center' });
+    doc.font(koreanFont).fontSize(9).fillColor(stemColor);
+    doc.text(`${yinYangMark}${p.elementKo}`, cellX, ty + stemH - 18, { width: colW, align: 'center' });
   }
   ty += stemH;
 
   // ─── 천간 십성 행 ───
   const tenGodStemH = 32;
   doc.rect(tableX, ty, tableW, tenGodStemH).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, tenGodStemH).strokeColor('#d1d5db').stroke();
+  doc.rect(tableX, ty, tableW, tenGodStemH).strokeColor('#e5e2dd').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   const tenGodStemY = getCenteredTextY(ty, tenGodStemH, 10);
   doc.text('십성', tableX, tenGodStemY, { width: labelColW, align: 'center' });
@@ -1583,40 +1555,53 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   }
   ty += tenGodStemH;
 
-  // ─── 지지 행 (포스텔러 스타일: 한자 크게 + 한글 아래) ───
-  const branchH = 90;
+  // ─── 지지 행 (포스텔러 스타일: 한글 크게 + 한자 옆에) ───
+  const branchH = 80;
   doc.rect(tableX, ty, tableW, branchH).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, branchH).strokeColor('#d1d5db').stroke();
-  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+  doc.rect(tableX, ty, tableW, branchH).strokeColor('#e5e2dd').stroke();
+  doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
   doc.text('지지', tableX, getCenteredTextY(ty, branchH, 9), { width: labelColW, align: 'center' });
 
   for (let i = 0; i < 4; i++) {
     const p = pillars[i].pillar;
     const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
+    const cellCenterX = cellX + colW / 2;
 
-    // 한자 크게 (셀 중앙) - NotoSansKR(한자 전용) 사용
-    const hanjaFontSize = 34;
-    const hanjaY = ty + 10;
-    doc.font(hanjaBoldFont).fontSize(hanjaFontSize).fillColor(branchColor);
-    doc.text(p.earthlyBranch, cellX, hanjaY, { width: colW, align: 'center', lineBreak: false });
+    // 한글 크게 + 한자 작게 (같은 줄, 나란히) - 포스텔러 스타일
+    const koText = p.earthlyBranchKo;
+    const hjText = p.earthlyBranch;
+    const koFontSize = 28;
+    const hjFontSize = 18;
 
-    // 한글 읽기 (한자 아래, 포스텔러 스타일)
-    doc.font(koreanFont).fontSize(12).fillColor(branchColor);
-    doc.text(p.earthlyBranchKo, cellX, hanjaY + hanjaFontSize + 6, { width: colW, align: 'center' });
+    doc.font(koreanBoldFont).fontSize(koFontSize);
+    const koWidth = doc.widthOfString(koText);
+    doc.font(hanjaFont).fontSize(hjFontSize);
+    const hjWidth = doc.widthOfString(hjText);
+    const totalWidth = koWidth + hjWidth + 2;
+    const startX = cellCenterX - totalWidth / 2;
+    const textY = ty + 14;
 
-    // 음양+오행 표시 (우측 하단)
+    // 한글 (크고 굵게)
+    doc.font(koreanBoldFont).fontSize(koFontSize).fillColor(branchColor);
+    doc.text(koText, startX, textY, { lineBreak: false });
+
+    // 한자 (작게, 한글 옆)
+    doc.font(hanjaFont).fontSize(hjFontSize).fillColor(branchColor);
+    doc.text(hjText, startX + koWidth + 2, textY + (koFontSize - hjFontSize), { lineBreak: false });
+
+    // 음양+오행 표시 (중앙 아래)
     const isYang = p.yinYangKo === '양';
     const yinYangMark = isYang ? '+' : '-';
-    doc.font(koreanFont).fontSize(8).fillColor('#9ca3af');
-    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 32, ty + branchH - 14, { width: 28, align: 'center' });
+    doc.font(koreanFont).fontSize(9).fillColor(branchColor);
+    doc.text(`${yinYangMark}${p.elementKo}`, cellX, ty + branchH - 18, { width: colW, align: 'center' });
   }
   ty += branchH;
 
   // ─── 지지 십성 행 ───
   const tenGodBranchH = 32;
   doc.rect(tableX, ty, tableW, tenGodBranchH).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, tenGodBranchH).strokeColor('#d1d5db').stroke();
+  doc.rect(tableX, ty, tableW, tenGodBranchH).strokeColor('#e5e2dd').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   const tenGodBranchY = getCenteredTextY(ty, tenGodBranchH, 10);
   doc.text('십성', tableX, tenGodBranchY, { width: labelColW, align: 'center' });
@@ -1635,7 +1620,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   if (result.hiddenStems) {
     const hiddenStemH = 60;
     doc.rect(tableX, ty, tableW, hiddenStemH).fill('#ffffff');
-    doc.rect(tableX, ty, tableW, hiddenStemH).strokeColor('#d1d5db').stroke();
+    doc.rect(tableX, ty, tableW, hiddenStemH).strokeColor('#e5e2dd').stroke();
     doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
     const hiddenStemY = getCenteredTextY(ty, hiddenStemH, 9);
     doc.text('지장간', tableX, hiddenStemY, { width: labelColW, align: 'center' });
@@ -1657,7 +1642,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   // ─── 운성 행 ───
   const stageH = 32;
   doc.rect(tableX, ty, tableW, stageH).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, stageH).strokeColor('#d1d5db').stroke();
+  doc.rect(tableX, ty, tableW, stageH).strokeColor('#e5e2dd').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   const stageY = getCenteredTextY(ty, stageH, 9);
   doc.text('운성', tableX, stageY, { width: labelColW, align: 'center' });
@@ -1683,7 +1668,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   maxSinsalHeight = Math.min(maxSinsalHeight, 70);
 
   doc.rect(tableX, ty, tableW, maxSinsalHeight).fill('#ffffff');
-  doc.rect(tableX, ty, tableW, maxSinsalHeight).strokeColor('#d1d5db').stroke();
+  doc.rect(tableX, ty, tableW, maxSinsalHeight).strokeColor('#e5e2dd').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   const sinsalY = getCenteredTextY(ty, maxSinsalHeight, 9);
   doc.text('신살', tableX, sinsalY, { width: labelColW, align: 'center' });
@@ -1734,7 +1719,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const g = gods[i];
     const elColor = ELEMENT_COLORS[g.value] || '#374151';
     doc.roundedRect(bx, ty + 12, badgeW, 48, 6).fill('#ffffff');
-    doc.roundedRect(bx, ty + 12, badgeW, 48, 6).strokeColor('#d1d5db').stroke();
+    doc.roundedRect(bx, ty + 12, badgeW, 48, 6).strokeColor('#e5e2dd').stroke();
     doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
     doc.text(g.label, bx, ty + 16, { width: badgeW, align: 'center' });
     doc.font(hanjaBoldFont).fontSize(18).fillColor(elColor);
