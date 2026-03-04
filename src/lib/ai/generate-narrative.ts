@@ -73,7 +73,7 @@ export async function generateNarrative(
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
-      temperature: 0.7,
+      temperature: 0.75,
       max_tokens: productCode === 'saju-basic' ? 8000 : 32000,
       response_format: { type: 'json_object' },
     });

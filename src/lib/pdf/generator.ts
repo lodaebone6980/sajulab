@@ -69,7 +69,7 @@ function generatePdfKitFallback(
     try {
       const doc = new PDFDocument({
         size: 'A4',
-        margins: { top: 60, bottom: 60, left: 50, right: 50 },
+        margins: { top: 70, bottom: 70, left: 55, right: 55 },
         info: {
           Title: `사주분석서 - ${options.customerName}`,
           Author: '사주 분석 서비스',
@@ -585,8 +585,8 @@ function renderNarrativeChapterLarge(
   const { width } = doc.page;
   const margin = 70;
   const contentWidth = width - margin * 2;
-  const fontSize = 13.5;    // sajulab.kr 기준 ~13-14pt
-  const lineGap = 16;       // sajulab.kr 기준 ~1.8-2x 행간
+  const fontSize = 14;      // sajulab.kr 기준 ~14pt
+  const lineGap = 22;       // sajulab.kr 기준 ~2x 행간 (더 넓게)
   const pageBottom = 700;
 
   // 상단 헤더 바
