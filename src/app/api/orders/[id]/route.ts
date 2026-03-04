@@ -77,9 +77,25 @@ export async function PATCH(
       return await runReanalysis(orderId, auth.userId);
     }
 
-    // 단순 상태 변경
+    // 상태 변경
     if (body.status) {
       updateOrderStatus(orderId, auth.userId, body.status);
+
+      // 'requested' 상태로 변경 시 → 백그라운드에서 분석 자동 시작
+      if (body.status === 'requested') {
+        const userId = auth.userId;
+        const bgAnalysis = async () => {
+          try {
+            console.log(`[AutoAnalyze] Starting analysis for order ${orderId}`);
+            await runReanalysis(orderId, userId);
+            console.log(`[AutoAnalyze] Order ${orderId} completed`);
+          } catch (err) {
+            console.error(`[AutoAnalyze] Order ${orderId} failed:`, err);
+            try { updateOrderStatus(orderId, userId, 'failed'); } catch (_) {}
+          }
+        };
+        bgAnalysis().catch(err => console.error('[AutoAnalyze] Background error:', err));
+      }
     }
 
     const updatedOrder = getOrderById(orderId, auth.userId);

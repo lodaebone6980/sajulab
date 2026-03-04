@@ -13,8 +13,8 @@ async function processOneOrder(orderId: number, userId: number) {
   const order = getOrderById(orderId, userId) as any;
   if (!order) throw new Error(`Order ${orderId} not found`);
 
-  // pending/failed만 처리
-  if (!['pending', 'failed'].includes(order.status)) {
+  // pending/failed/requested만 처리
+  if (!['pending', 'failed', 'requested'].includes(order.status)) {
     console.log(`[Batch] Skip order ${orderId} (status: ${order.status})`);
     return;
   }
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
     for (const id of orderIds) {
       try {
         const order = getOrderById(id, userId) as any;
-        if (order && ['pending', 'failed'].includes(order.status)) {
+        if (order && ['pending', 'failed', 'requested'].includes(order.status)) {
           updateOrderStatus(id, userId, 'requested');
         }
       } catch (e) {
