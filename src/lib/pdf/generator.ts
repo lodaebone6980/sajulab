@@ -534,40 +534,34 @@ function renderGreetingPageLarge(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 70;
+  const margin = 60;
+  const contentWidth = width - margin * 2;
 
   // 타이틀
-  doc.font(koreanBoldFont).fontSize(28).fillColor('#d4af37');
-  doc.text(`${customerName}님께`, 0, 100, { align: 'center', width });
+  doc.font(koreanBoldFont).fontSize(22).fillColor('#d4af37');
+  doc.text(`${customerName}님께`, 0, 80, { align: 'center', width });
 
   // 장식선
-  doc.rect(width / 2 - 30, 142, 60, 2).fill('#d4af37');
+  doc.rect(width / 2 - 25, 112, 50, 2).fill('#d4af37');
 
-  // 인사말 본문 (큰 폰트 + 넓은 줄간격)
-  const contentWidth = width - margin * 2;
-  let y = 180;
+  // 인사말 본문 (적절한 크기)
+  let y = 135;
   const paragraphs = greeting.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
     if (!trimmed) continue;
 
-    doc.font(koreanFont).fontSize(20).fillColor('#374151');
-    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 28 });
-
-    if (y + h > 640) {
-      doc.addPage();
-      y = 80;
-    }
-
-    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 28 });
-    y += h + 32;
+    doc.font(koreanFont).fontSize(11).fillColor('#374151');
+    const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 8 });
+    if (y + h > 720) { doc.addPage(); y = 80; }
+    doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 8 });
+    y += h + 12;
   }
 
   // 서명
-  const sigY = Math.min(y + 30, 680);
-  doc.font(koreanFont).fontSize(12).fillColor('#6b7280');
-  doc.text('운명길잡이 드림', 0, sigY, { align: 'right', width: width - margin });
+  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.text('운명길잡이 드림', 0, y + 10, { align: 'right', width: width - margin });
 }
 
 // ─── 챕터 타이틀 페이지 (어두운 배경) ───
@@ -935,56 +929,56 @@ function renderAnalysisGuidePage(
   koreanBoldFont: string
 ) {
   const { width } = doc.page;
-  const margin = 80;
+  const margin = 60;
   const contentWidth = width - margin * 2;
 
   // 헤더
-  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
-  doc.text('ANALYSIS GUIDE', margin, 70);
+  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+  doc.text('ANALYSIS GUIDE', margin, 60);
 
-  doc.font(koreanBoldFont).fontSize(26).fillColor('#1f2937');
-  doc.text('사주 분석 안내', margin, 95);
+  doc.font(koreanBoldFont).fontSize(20).fillColor('#1f2937');
+  doc.text('사주 분석 안내', margin, 78);
 
-  doc.rect(margin, 132, 50, 3).fill('#d4af37');
-  doc.moveTo(margin, 145).lineTo(width - margin, 145).strokeColor('#e5e7eb').lineWidth(1).stroke();
+  doc.rect(margin, 108, 40, 2.5).fill('#d4af37');
+  doc.moveTo(margin, 118).lineTo(width - margin, 118).strokeColor('#e5e7eb').lineWidth(1).stroke();
 
-  let y = 175;
+  let y = 135;
   const guideItems = [
     {
       title: '사주팔자(四柱八字)란?',
-      content: '사주팔자는 태어난 해, 달, 날, 시간을 네 개의 기둥(四柱)과 여덟 개의 글자(八字)로 나타낸 것입니다. 이 여덟 글자에는 당신의 타고난 성격, 재능, 인연, 그리고 인생의 흐름이 담겨 있습니다. 수천 년 동양 철학의 지혜가 녹아든 사주명리학은 단순한 점술이 아닌, 자연의 이치를 바탕으로 한 깊이 있는 인생 분석 체계입니다.',
+      content: '사주팔자는 태어난 해, 달, 날, 시간을 네 개의 기둥(四柱)과 여덟 개의 글자(八字)로 나타낸 것입니다. 이 여덟 글자에는 당신의 타고난 성격, 재능, 인연, 그리고 인생의 흐름이 담겨 있습니다.',
     },
     {
       title: '용신(用神)이란?',
-      content: '용신은 사주에서 가장 필요로 하는 오행의 기운을 말합니다. 사주의 균형을 잡아주고, 부족한 기운을 채워주는 핵심 요소입니다. 용신의 기운을 잘 활용하면 운을 더욱 좋은 방향으로 이끌 수 있으며, 일상에서 용신에 해당하는 색상, 방향, 숫자 등을 활용하면 개운 효과를 기대할 수 있습니다.',
+      content: '용신은 사주에서 가장 필요로 하는 오행의 기운을 말합니다. 용신의 기운을 잘 활용하면 운을 더욱 좋은 방향으로 이끌 수 있으며, 일상에서 용신에 해당하는 색상, 방향, 숫자 등을 활용하면 개운 효과를 기대할 수 있습니다.',
     },
     {
       title: '오행(五行)의 의미',
-      content: '오행은 목(木), 화(火), 토(土), 금(金), 수(水)의 다섯 가지 원소를 말합니다. 이 다섯 가지 기운은 서로 돕고(상생) 억제하는(상극) 관계를 가지며, 사주 안에서 이 오행의 분포와 관계가 당신의 성격과 운명의 흐름을 결정짓는 핵심 요인이 됩니다.',
+      content: '오행은 목(木), 화(火), 토(土), 금(金), 수(水)의 다섯 가지 원소입니다. 이 다섯 기운은 서로 돕고(상생) 억제하는(상극) 관계를 가지며, 사주 안에서 오행의 분포와 관계가 성격과 운명을 결정짓는 핵심 요인입니다.',
     },
     {
       title: '대운(大運)과 세운(歲運)',
-      content: '대운은 10년 단위로 바뀌는 큰 운의 흐름이고, 세운은 해마다 바뀌는 한 해의 운입니다. 대운이 인생의 큰 그림을 그린다면, 세운은 그 해의 구체적인 분위기와 기회를 보여줍니다. 이 두 가지를 함께 보면 더 정확한 시기별 운세 판단이 가능합니다.',
+      content: '대운은 10년 단위로 바뀌는 큰 운의 흐름이고, 세운은 해마다 바뀌는 한 해의 운입니다. 이 두 가지를 함께 보면 더 정확한 시기별 운세 판단이 가능합니다.',
     },
     {
       title: '이 분석서 활용법',
-      content: '이 분석서는 당신의 사주를 깊이 있게 분석하여, 타고난 성향부터 재물운, 직업운, 연애운, 건강운까지 다각도로 살펴본 결과입니다. 운명은 정해진 것이 아니라 알고 대비하면 더 좋은 방향으로 바꿀 수 있습니다. 이 분석서를 삶의 나침반으로 활용하시기 바랍니다.',
+      content: '이 분석서는 타고난 성향부터 재물운, 직업운, 연애운, 건강운까지 다각도로 분석한 결과입니다. 운명은 알고 대비하면 더 좋은 방향으로 바꿀 수 있습니다.',
     },
   ];
 
   for (const item of guideItems) {
-    if (y > 580) { doc.addPage(); y = 80; }
+    if (y > 660) { doc.addPage(); y = 60; }
 
     // 제목
-    doc.font(koreanBoldFont).fontSize(16).fillColor('#5c3a2e');
+    doc.font(koreanBoldFont).fontSize(11).fillColor('#5c3a2e');
     doc.text(item.title, margin, y);
-    y += 28;
+    y += 18;
 
     // 내용
-    doc.font(koreanFont).fontSize(14).fillColor('#374151');
-    const h = doc.heightOfString(item.content, { width: contentWidth, lineGap: 16 });
-    doc.text(item.content, margin, y, { width: contentWidth, lineGap: 16 });
-    y += h + 30;
+    doc.font(koreanFont).fontSize(9.5).fillColor('#374151');
+    const h = doc.heightOfString(item.content, { width: contentWidth, lineGap: 5 });
+    doc.text(item.content, margin, y, { width: contentWidth, lineGap: 5 });
+    y += h + 16;
   }
 }
 
@@ -1016,33 +1010,33 @@ function renderFourPillarsExplanation(
   const dayElement = fourPillars.day.elementKo;
   const dayStem = fourPillars.day.heavenlyStemKo;
 
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#5c3a2e');
+  doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
   doc.text(`일간: ${dayStem} (${dayElement}의 기운)`, margin, y);
-  y += 35;
+  y += 22;
 
   const dayExplanation = `당신의 일간은 ${dayStem}으로, ${dayElement}의 기운을 타고났습니다. 일간은 사주의 주인공으로서 당신 자신을 나타내는 핵심 글자입니다. ${dayElement}의 성질에 따라 기본적인 성격과 가치관, 행동 양식이 결정됩니다.`;
-  doc.font(koreanFont).fontSize(16).fillColor('#374151');
-  const dh = doc.heightOfString(dayExplanation, { width: contentWidth, lineGap: 22 });
-  doc.text(dayExplanation, margin, y, { width: contentWidth, lineGap: 22 });
-  y += dh + 30;
+  doc.font(koreanFont).fontSize(12).fillColor('#374151');
+  const dh = doc.heightOfString(dayExplanation, { width: contentWidth, lineGap: 8 });
+  doc.text(dayExplanation, margin, y, { width: contentWidth, lineGap: 8 });
+  y += dh + 16;
 
   // 용신 해설
   if (y > 500) { doc.addPage(); y = 80; }
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#5c3a2e');
+  doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
   doc.text(`용신: ${yongSin}`, margin, y);
-  y += 35;
+  y += 22;
 
   const yongSinExplanation = `당신의 용신은 ${yongSin}입니다. 용신은 사주에서 가장 필요로 하는 기운으로, 이 기운을 보충하면 운이 상승합니다. 일상에서 ${yongSin}에 해당하는 색상, 방향, 직업 등을 가까이하면 좋은 효과를 볼 수 있습니다.`;
-  doc.font(koreanFont).fontSize(16).fillColor('#374151');
-  const yh = doc.heightOfString(yongSinExplanation, { width: contentWidth, lineGap: 22 });
-  doc.text(yongSinExplanation, margin, y, { width: contentWidth, lineGap: 22 });
-  y += yh + 30;
+  doc.font(koreanFont).fontSize(12).fillColor('#374151');
+  const yh = doc.heightOfString(yongSinExplanation, { width: contentWidth, lineGap: 8 });
+  doc.text(yongSinExplanation, margin, y, { width: contentWidth, lineGap: 8 });
+  y += yh + 16;
 
   // 오행 분포 해설
   if (y > 500) { doc.addPage(); y = 80; }
-  doc.font(koreanBoldFont).fontSize(18).fillColor('#5c3a2e');
+  doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
   doc.text('오행 분포 분석', margin, y);
-  y += 35;
+  y += 22;
 
   const elements = [
     { name: '목(木)', count: elementDistribution.wood, desc: '성장, 창의력, 인내' },
@@ -1054,9 +1048,9 @@ function renderFourPillarsExplanation(
 
   for (const el of elements) {
     if (y > 600) { doc.addPage(); y = 80; }
-    doc.font(koreanBoldFont).fontSize(14).fillColor('#374151');
+    doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
     doc.text(`${el.name} ${el.count}개 - ${el.desc}`, margin + 10, y);
-    y += 32;
+    y += 16;
   }
 }
 
@@ -1481,30 +1475,56 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   }
   ty += 30;
 
-  // ─── 천간 행 (한자 크게) ───
-  const stemH = 75;
+  // ─── 천간 행 (한자 크게 + 오행 표시) ───
+  const stemH = 85;
   doc.rect(tableX, ty, tableW, stemH).strokeColor('#e2e8f0').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text('천간', tableX, ty + 28, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
     const p = pillars[i];
-    // 화(火) 계열은 빨간색, 나머지는 검정
-    const stemColor = p.pillar.elementKo === '화' ? '#c44040' : '#1f2937';
+    // 오행별 색상 지정
+    const elementColorMap: { [key: string]: string } = {
+      '화': '#c44040',
+      '수': '#4a7ba7',
+      '목': '#3d7a3d',
+      '토': '#8b6f47',
+      '금': '#7a8a7a'
+    };
+    const stemColor = elementColorMap[p.pillar.elementKo] || '#1f2937';
+
+    // 천간 한자
     doc.font(koreanBoldFont).fontSize(44).fillColor(stemColor);
-    doc.text(p.pillar.heavenlyStem, tableX + labelColW + i * colW, ty + 12, { width: colW, align: 'center' });
+    doc.text(p.pillar.heavenlyStem, tableX + labelColW + i * colW, ty + 8, { width: colW, align: 'center' });
+
+    // 오행 표시
+    doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
+    doc.text(`+${p.pillar.elementKo}`, tableX + labelColW + i * colW, ty + 55, { width: colW, align: 'center' });
   }
   ty += stemH;
 
-  // ─── 지지 행 (한자 크게) ───
-  const branchH = 75;
+  // ─── 지지 행 (한자 크게 + 오행 표시) ───
+  const branchH = 85;
   doc.rect(tableX, ty, tableW, branchH).strokeColor('#e2e8f0').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text('지지', tableX, ty + 28, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
     const p = pillars[i];
-    const branchColor = p.pillar.elementKo === '화' ? '#c44040' : '#1f2937';
+    const elementColorMap: { [key: string]: string } = {
+      '화': '#c44040',
+      '수': '#4a7ba7',
+      '목': '#3d7a3d',
+      '토': '#8b6f47',
+      '금': '#7a8a7a'
+    };
+    const branchColor = elementColorMap[p.pillar.elementKo] || '#1f2937';
+
+    // 지지 한자
     doc.font(koreanBoldFont).fontSize(44).fillColor(branchColor);
-    doc.text(p.pillar.earthlyBranch, tableX + labelColW + i * colW, ty + 12, { width: colW, align: 'center' });
+    doc.text(p.pillar.earthlyBranch, tableX + labelColW + i * colW, ty + 8, { width: colW, align: 'center' });
+
+    // 오행 표시
+    doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
+    doc.text(`+${p.pillar.elementKo}`, tableX + labelColW + i * colW, ty + 55, { width: colW, align: 'center' });
   }
   ty += branchH;
 
@@ -1535,20 +1555,31 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   }
   ty += 30;
 
-  // ─── 신살 행 ───
-  doc.rect(tableX, ty, tableW, 30).strokeColor('#e2e8f0').stroke();
+  // ─── 신살 행 (높이 동적 조절) ───
+  // 신살 텍스트 길이 확인
+  const pillars_order = ['hour', 'day', 'month', 'year'] as const;
+  let maxSinsalHeight = 30;
+  for (let i = 0; i < 4; i++) {
+    const currentPillar = pillars_order[i];
+    const sinsalForPillar = result.sinsal?.filter(s => s.pillar === currentPillar).map(s => s.name) || [];
+    const sinsalText = sinsalForPillar.length > 0 ? sinsalForPillar.join(',') : '-';
+    doc.font(koreanFont).fontSize(9.5);
+    const h = doc.heightOfString(sinsalText, { width: colW - 10, lineGap: 3 });
+    maxSinsalHeight = Math.max(maxSinsalHeight, h + 16);
+  }
+  maxSinsalHeight = Math.min(maxSinsalHeight, 60); // 최대 60
+
+  doc.rect(tableX, ty, tableW, maxSinsalHeight).strokeColor('#e2e8f0').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text('신살', tableX, ty + 10, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
-    const pillars_order = ['hour', 'day', 'month', 'year'] as const;
     const currentPillar = pillars_order[i];
-    // Find all sinsal entries for this pillar
     const sinsalForPillar = result.sinsal?.filter(s => s.pillar === currentPillar).map(s => s.name) || [];
     const sinsalText = sinsalForPillar.length > 0 ? sinsalForPillar.join(',') : '-';
-    doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(sinsalText, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+    doc.font(koreanFont).fontSize(9.5).fillColor('#374151');
+    doc.text(sinsalText, tableX + labelColW + i * colW, ty + 8, { width: colW - 10, align: 'center', lineGap: 3 });
   }
-  ty += 30;
+  ty += maxSinsalHeight;
 
   // ─── 세로 구분선 그리기 ───
   const tableTop = 185;
