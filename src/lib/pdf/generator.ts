@@ -1498,15 +1498,14 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한글 + 한자 병기 (한글을 크게, 한자를 작게)
-    const textCenterY = ty + stemH / 2;
-    doc.font(koreanBoldFont).fontSize(32).fillColor(stemColor);
-    doc.text(p.heavenlyStemKo, cellX, textCenterY - 18, { width: colW, align: 'center' });
+    // 한글 + 한자 병기 (한글 위, 한자 아래 — 포스텔러 스타일)
+    doc.font(koreanBoldFont).fontSize(30).fillColor(stemColor);
+    doc.text(p.heavenlyStemKo, cellX, ty + 10, { width: colW, align: 'center' });
 
-    doc.font(koreanFont).fontSize(18).fillColor(stemColor);
-    doc.text(p.heavenlyStem, cellX, textCenterY - 2, { width: colW, align: 'center' });
+    doc.font(koreanFont).fontSize(16).fillColor(stemColor);
+    doc.text(p.heavenlyStem, cellX, ty + 48, { width: colW, align: 'center' });
 
-    // 음양 표시 (우측 하단)
+    // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
     const yinYangMark = isYang ? '+' : '-';
     doc.font(koreanFont).fontSize(9).fillColor(stemColor);
@@ -1540,15 +1539,14 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한글 + 한자 병기
-    const textCenterY = ty + branchH / 2;
-    doc.font(koreanBoldFont).fontSize(32).fillColor(branchColor);
-    doc.text(p.earthlyBranchKo, cellX, textCenterY - 18, { width: colW, align: 'center' });
+    // 한글 + 한자 병기 (한글 위, 한자 아래 — 포스텔러 스타일)
+    doc.font(koreanBoldFont).fontSize(30).fillColor(branchColor);
+    doc.text(p.earthlyBranchKo, cellX, ty + 10, { width: colW, align: 'center' });
 
-    doc.font(koreanFont).fontSize(18).fillColor(branchColor);
-    doc.text(p.earthlyBranch, cellX, textCenterY - 2, { width: colW, align: 'center' });
+    doc.font(koreanFont).fontSize(16).fillColor(branchColor);
+    doc.text(p.earthlyBranch, cellX, ty + 48, { width: colW, align: 'center' });
 
-    // 음양 표시
+    // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
     const yinYangMark = isYang ? '+' : '-';
     doc.font(koreanFont).fontSize(9).fillColor(branchColor);
