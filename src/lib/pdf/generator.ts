@@ -13,9 +13,9 @@ const FONT_BOLD = path.join(FONTS_DIR, 'NotoSansKR-Bold.ttf');
 const FONT_NANUM_REGULAR = path.join(FONTS_DIR, 'NanumGothic-Regular.ttf');
 const FONT_NANUM_BOLD = path.join(FONTS_DIR, 'NanumGothic-Bold.ttf');
 
-// 오행 색상 (sajulab.kr 참고 - 따뜻하고 차분한 머티드 톤)
+// 오행 색상 (forceteller.com 스타일 - 파스텔 톤)
 const ELEMENT_COLORS: Record<string, string> = {
-  '목': '#5a7a6b', '화': '#c47d5e', '토': '#c4a055', '금': '#8c8c8c', '수': '#5c7d8e',
+  '목': '#6ab06a', '화': '#e8786f', '토': '#c4a055', '금': '#8e8e8e', '수': '#4a90d9',
 };
 const ELEMENT_HANJA: Record<string, string> = {
   '목': '木', '화': '火', '토': '土', '금': '金', '수': '水',
@@ -867,13 +867,13 @@ function renderTenGodDistribution(
     margin + 16, y + 16, { width: contentW - 32, lineGap: 5 }
   );
 
-  // ─── 5대 십신 그룹 카드 (sajulab.kr 스타일) ───
+  // ─── 5대 십신 그룹 카드 (forceteller 스타일) ───
   const groups = [
-    { icon: '比', name: '비겁 (비견·겁재)', desc: '자아의 힘, 독립심, 경쟁에서의 주체성을 의미합니다.', color: '#5a7a6b' },
-    { icon: '食', name: '식상 (식신·상관)', desc: '창의적인 표현력, 언변, 재능 발휘를 상징합니다.', color: '#c47d5e' },
+    { icon: '比', name: '비겁 (비견·겁재)', desc: '자아의 힘, 독립심, 경쟁에서의 주체성을 의미합니다.', color: '#6ab06a' },
+    { icon: '食', name: '식상 (식신·상관)', desc: '창의적인 표현력, 언변, 재능 발휘를 상징합니다.', color: '#e8786f' },
     { icon: '財', name: '재성 (편재·정재)', desc: '현실적인 감각, 목표 달성 능력, 재물을 의미합니다.', color: '#c4a055' },
-    { icon: '官', name: '관성 (편관·정관)', desc: '사회적 책임, 명예, 조직 내의 규율을 의미합니다.', color: '#7a6855' },
-    { icon: '印', name: '인성 (편인·정인)', desc: '지혜, 학문적 성취, 문서운, 수용 능력을 상징합니다.', color: '#5c7d8e' },
+    { icon: '官', name: '관성 (편관·정관)', desc: '사회적 책임, 명예, 조직 내의 규율을 의미합니다.', color: '#8e8e8e' },
+    { icon: '印', name: '인성 (편인·정인)', desc: '지혜, 학문적 성취, 문서운, 수용 능력을 상징합니다.', color: '#4a90d9' },
   ];
 
   // 각 그룹의 개수 계산 (천간 십신 사용)
@@ -904,7 +904,8 @@ function renderTenGodDistribution(
     // 한자 원형 아이콘 (큰 사이즈)
     doc.circle(margin + 35, cardY + cardH / 2, 22).strokeColor(g.color).lineWidth(2).stroke();
     doc.font(koreanBoldFont).fontSize(20).fillColor(g.color);
-    doc.text(g.icon, margin + 15, cardY + cardH / 2 - 12, { width: 40, align: 'center' });
+    const iconTextY = cardY + cardH / 2 - 20 * 0.45;
+    doc.text(g.icon, margin + 15, iconTextY, { width: 40, align: 'center' });
 
     // 이름 + 설명
     doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
@@ -1394,7 +1395,8 @@ function renderTableOfContents(doc: PDFKit.PDFDocument, result: SajuResult, opti
     // Number circle
     doc.circle(leftX + 16, y + 10, 14).fill('#f1f5f9');
     doc.font(koreanBoldFont).fontSize(10).fillColor('#6b3a3a');
-    doc.text(item.num, leftX + 4, y + 5, { width: 24, align: 'center' });
+    const tocCircleY = y + 10 - 10 * 0.45;
+    doc.text(item.num, leftX + 4, tocCircleY, { width: 24, align: 'center' });
 
     // Title
     doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
@@ -1414,216 +1416,269 @@ function renderTableOfContents(doc: PDFKit.PDFDocument, result: SajuResult, opti
 }
 
 // ─────────────────────────────────────────────
+//  HELPER: Text vertical centering for Korean fonts
+// ─────────────────────────────────────────────
+function getCenteredTextY(cellY: number, cellHeight: number, fontSize: number): number {
+  return cellY + (cellHeight - fontSize) / 2 - fontSize * 0.15;
+}
+
+// ─────────────────────────────────────────────
 //  FOUR PILLARS (사주원국표)
 // ─────────────────────────────────────────────
 function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string) {
-  const { width } = doc.page;
+  const { width, height } = doc.page;
   const { fourPillars, tenGods, birthInfo } = result;
-  const margin = 50;
+  const margin = 40;
 
   // ─── 헤더 ───
-  doc.rect(margin, 45, width - margin * 2, 2).fill('#6b3a3a');
-  doc.font(koreanBoldFont).fontSize(22).fillColor('#1f2937');
-  doc.text('사주원국표', 0, 65, { align: 'center', width });
-  doc.font(koreanFont).fontSize(10).fillColor('#9ca3af');
-  doc.text('THE DESTINY CHART', 0, 92, { align: 'center', width });
+  doc.font(koreanBoldFont).fontSize(24).fillColor('#1f2937');
+  doc.text('사주원국표', 0, 50, { align: 'center', width });
+  doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
+  doc.text('THE DESTINY CHART', 0, 78, { align: 'center', width });
 
   // ─── 이름 + 생년월일 ───
-  doc.font(koreanBoldFont).fontSize(16).fillColor('#1f2937');
-  doc.text(`${result.birthInfo.gender === 'male' ? '남' : '여'} ${birthInfo.year}년생`, 0, 118, { align: 'center', width });
-  doc.font(koreanFont).fontSize(10).fillColor('#6b7280');
+  doc.font(koreanBoldFont).fontSize(13).fillColor('#374151');
+  doc.text(`${result.birthInfo.gender === 'male' ? '남' : '여'} ${birthInfo.year}년생`, 0, 95, { align: 'center', width });
+  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
   doc.text(
     `양력 ${birthInfo.year}년 ${String(birthInfo.month).padStart(2, '0')}월 ${String(birthInfo.day).padStart(2, '0')}일`,
-    0, 140, { align: 'center', width }
+    0, 110, { align: 'center', width }
   );
-  doc.text(`출생시 ${fourPillars.hour.earthlyBranchKo}시`, 0, 155, { align: 'center', width });
+  doc.text(`출생시 ${fourPillars.hour.earthlyBranchKo}시`, 0, 124, { align: 'center', width });
 
-  // ─── 테이블 레이아웃 (sajulab.kr 참고) ───
+  // ─── 테이블 설정 (forceteller 스타일 - 전체 페이지를 가득 채우기) ───
+  const tableX = margin;
+  const tableW = width - margin * 2;
+  const labelColW = 65;
+  const colW = (tableW - labelColW) / 4;
+  let ty = 150;
+
   const pillars = [
-    { label: '시주', pillar: fourPillars.hour, tenGod: tenGods.hour },
-    { label: '일주', pillar: fourPillars.day, tenGod: '일간(나)' },
-    { label: '월주', pillar: fourPillars.month, tenGod: tenGods.month },
-    { label: '년주', pillar: fourPillars.year, tenGod: tenGods.year },
+    { label: '시주', index: 0, pillar: fourPillars.hour, tenGod: tenGods.hour, life: '말년운/자녀운,결실' },
+    { label: '일주', index: 1, pillar: fourPillars.day, tenGod: '일간(나)', life: '중년운/정체성,자아' },
+    { label: '월주', index: 2, pillar: fourPillars.month, tenGod: tenGods.month, life: '청년운/부모,사회상' },
+    { label: '년주', index: 3, pillar: fourPillars.year, tenGod: tenGods.year, life: '초년운/조상,시대상' },
   ];
 
-  const tableX = margin + 10;
-  const tableW = width - margin * 2 - 20;
-  const labelColW = 55;
-  const colW = (tableW - labelColW) / 4;
-  let ty = 185;
-
-  // 테이블 헤더 배경
-  doc.rect(tableX, ty, tableW, 32).fill('#f5f0eb');
-  doc.rect(tableX, ty, tableW, 32).strokeColor('#e2e8f0').stroke();
-
-  // 구분 헤더
-  doc.font(koreanBoldFont).fontSize(10).fillColor('#6b7280');
-  doc.text('구분', tableX, ty + 10, { width: labelColW, align: 'center' });
+  // 테이블 헤더 (구분)
+  doc.rect(tableX, ty, tableW, 35).fill('#f3f0ed');
+  doc.rect(tableX, ty, tableW, 35).strokeColor('#d1d5db').stroke();
+  doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
+  const headerY = getCenteredTextY(ty, 35, 11);
+  doc.text('구분', tableX, headerY, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
-    doc.font(koreanBoldFont).fontSize(12).fillColor('#1f2937');
-    doc.text(pillars[i].label, tableX + labelColW + i * colW, ty + 8, { width: colW, align: 'center' });
+    doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
+    doc.text(pillars[i].label, tableX + labelColW + i * colW, headerY, { width: colW, align: 'center' });
   }
-  ty += 32;
+  ty += 35;
 
-  // ─── 십성 행 ───
-  doc.rect(tableX, ty, tableW, 30).strokeColor('#e2e8f0').stroke();
-  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('십성', tableX, ty + 10, { width: labelColW, align: 'center' });
+  // 선택적: 개념 레이블 행 (운세 관련 설명)
+  doc.rect(tableX, ty, tableW, 20).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, 20).strokeColor('#d1d5db').stroke();
+  doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
   for (let i = 0; i < 4; i++) {
-    doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(pillars[i].tenGod, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+    doc.text(pillars[i].life, tableX + labelColW + i * colW, ty + 6, { width: colW - 4, align: 'center' });
   }
-  ty += 30;
+  ty += 20;
 
-  // ─── 천간 행 (한자 크게 + 오행 표시) ───
-  const stemH = 85;
-  doc.rect(tableX, ty, tableW, stemH).strokeColor('#e2e8f0').stroke();
+  // ─── 천간 행 ───
+  const stemH = 100;
+  doc.rect(tableX, ty, tableW, stemH).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, stemH).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('천간', tableX, ty + 28, { width: labelColW, align: 'center' });
+  const stemLabelY = getCenteredTextY(ty, stemH, 9);
+  doc.text('천간', tableX, stemLabelY, { width: labelColW, align: 'center' });
+
   for (let i = 0; i < 4; i++) {
-    const p = pillars[i];
-    // 오행별 색상 지정
-    const elementColorMap: { [key: string]: string } = {
-      '화': '#c44040',
-      '수': '#4a7ba7',
-      '목': '#3d7a3d',
-      '토': '#8b6f47',
-      '금': '#7a8a7a'
-    };
-    const stemColor = elementColorMap[p.pillar.elementKo] || '#1f2937';
+    const p = pillars[i].pillar;
+    const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
+    const cellX = tableX + labelColW + i * colW;
 
-    // 천간 한자
-    doc.font(koreanBoldFont).fontSize(44).fillColor(stemColor);
-    doc.text(p.pillar.heavenlyStem, tableX + labelColW + i * colW, ty + 8, { width: colW, align: 'center' });
+    // 한글 + 한자 병기 (한글을 크게, 한자를 작게)
+    const textCenterY = ty + stemH / 2;
+    doc.font(koreanBoldFont).fontSize(32).fillColor(stemColor);
+    doc.text(p.heavenlyStemKo, cellX, textCenterY - 18, { width: colW, align: 'center' });
 
-    // 오행 표시
-    doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
-    doc.text(`+${p.pillar.elementKo}`, tableX + labelColW + i * colW, ty + 55, { width: colW, align: 'center' });
+    doc.font(koreanFont).fontSize(18).fillColor(stemColor);
+    doc.text(p.heavenlyStem, cellX, textCenterY - 2, { width: colW, align: 'center' });
+
+    // 음양 표시 (우측 하단)
+    const isYang = p.yinYangKo === '양';
+    const yinYangMark = isYang ? '+' : '-';
+    doc.font(koreanFont).fontSize(9).fillColor(stemColor);
+    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 28, ty + stemH - 14, { width: 24, align: 'center' });
   }
   ty += stemH;
 
-  // ─── 지지 행 (한자 크게 + 오행 표시) ───
-  const branchH = 85;
-  doc.rect(tableX, ty, tableW, branchH).strokeColor('#e2e8f0').stroke();
+  // ─── 천간 십성 행 ───
+  const tenGodStemH = 45;
+  doc.rect(tableX, ty, tableW, tenGodStemH).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, tenGodStemH).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('지지', tableX, ty + 28, { width: labelColW, align: 'center' });
+  const tenGodStemY = getCenteredTextY(ty, tenGodStemH, 10);
+  doc.text('십성', tableX, tenGodStemY, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
-    const p = pillars[i];
-    const elementColorMap: { [key: string]: string } = {
-      '화': '#c44040',
-      '수': '#4a7ba7',
-      '목': '#3d7a3d',
-      '토': '#8b6f47',
-      '금': '#7a8a7a'
-    };
-    const branchColor = elementColorMap[p.pillar.elementKo] || '#1f2937';
+    doc.font(koreanFont).fontSize(10).fillColor('#374151');
+    doc.text(pillars[i].tenGod, tableX + labelColW + i * colW, tenGodStemY, { width: colW, align: 'center' });
+  }
+  ty += tenGodStemH;
 
-    // 지지 한자
-    doc.font(koreanBoldFont).fontSize(44).fillColor(branchColor);
-    doc.text(p.pillar.earthlyBranch, tableX + labelColW + i * colW, ty + 8, { width: colW, align: 'center' });
+  // ─── 지지 행 ───
+  const branchH = 100;
+  doc.rect(tableX, ty, tableW, branchH).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, branchH).strokeColor('#d1d5db').stroke();
+  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+  const branchLabelY = getCenteredTextY(ty, branchH, 9);
+  doc.text('지지', tableX, branchLabelY, { width: labelColW, align: 'center' });
 
-    // 오행 표시
-    doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
-    doc.text(`+${p.pillar.elementKo}`, tableX + labelColW + i * colW, ty + 55, { width: colW, align: 'center' });
+  for (let i = 0; i < 4; i++) {
+    const p = pillars[i].pillar;
+    const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
+    const cellX = tableX + labelColW + i * colW;
+
+    // 한글 + 한자 병기
+    const textCenterY = ty + branchH / 2;
+    doc.font(koreanBoldFont).fontSize(32).fillColor(branchColor);
+    doc.text(p.earthlyBranchKo, cellX, textCenterY - 18, { width: colW, align: 'center' });
+
+    doc.font(koreanFont).fontSize(18).fillColor(branchColor);
+    doc.text(p.earthlyBranch, cellX, textCenterY - 2, { width: colW, align: 'center' });
+
+    // 음양 표시
+    const isYang = p.yinYangKo === '양';
+    const yinYangMark = isYang ? '+' : '-';
+    doc.font(koreanFont).fontSize(9).fillColor(branchColor);
+    doc.text(`${yinYangMark}${p.elementKo}`, cellX + colW - 28, ty + branchH - 14, { width: 24, align: 'center' });
   }
   ty += branchH;
 
-  // ─── 십성(지지) 행 ───
-  doc.rect(tableX, ty, tableW, 30).strokeColor('#e2e8f0').stroke();
+  // ─── 지지 십성 행 ───
+  const tenGodBranchH = 45;
+  doc.rect(tableX, ty, tableW, tenGodBranchH).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, tenGodBranchH).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('십성', tableX, ty + 10, { width: labelColW, align: 'center' });
+  const tenGodBranchY = getCenteredTextY(ty, tenGodBranchH, 10);
+  doc.text('십성', tableX, tenGodBranchY, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
     let branchTenGod = '-';
-    if (i === 0) branchTenGod = tenGods.hourBranch || '-';      // 시주
-    else if (i === 1) branchTenGod = tenGods.dayBranch || '-';   // 일주
-    else if (i === 2) branchTenGod = tenGods.monthBranch || '-'; // 월주
-    else if (i === 3) branchTenGod = tenGods.yearBranch || '-';  // 년주
-    doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(branchTenGod, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+    if (i === 0) branchTenGod = tenGods.hourBranch || '-';
+    else if (i === 1) branchTenGod = tenGods.dayBranch || '-';
+    else if (i === 2) branchTenGod = tenGods.monthBranch || '-';
+    else if (i === 3) branchTenGod = tenGods.yearBranch || '-';
+    doc.font(koreanFont).fontSize(10).fillColor('#374151');
+    doc.text(branchTenGod, tableX + labelColW + i * colW, tenGodBranchY, { width: colW, align: 'center' });
   }
-  ty += 30;
+  ty += tenGodBranchH;
+
+  // ─── 지장간 행 (hidden stems) ───
+  if (result.hiddenStems) {
+    const hiddenStemH = 60;
+    doc.rect(tableX, ty, tableW, hiddenStemH).fill('#ffffff');
+    doc.rect(tableX, ty, tableW, hiddenStemH).strokeColor('#d1d5db').stroke();
+    doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+    const hiddenStemY = getCenteredTextY(ty, hiddenStemH, 9);
+    doc.text('지장간', tableX, hiddenStemY, { width: labelColW, align: 'center' });
+
+    const hiddenKey = ['hour', 'day', 'month', 'year'] as const;
+    for (let i = 0; i < 4; i++) {
+      const hidden = result.hiddenStems[hiddenKey[i]];
+      let hiddenText = '';
+      if (hidden.余) hiddenText += hidden.余;
+      if (hidden.中) hiddenText += (hiddenText ? ',' : '') + hidden.中;
+      if (hidden.正) hiddenText += (hiddenText ? ',' : '') + hidden.正;
+
+      doc.font(koreanFont).fontSize(9).fillColor('#374151');
+      doc.text(hiddenText || '-', tableX + labelColW + i * colW, hiddenStemY, { width: colW, align: 'center' });
+    }
+    ty += hiddenStemH;
+  }
 
   // ─── 운성 행 ───
-  doc.rect(tableX, ty, tableW, 30).strokeColor('#e2e8f0').stroke();
+  const stageH = 45;
+  doc.rect(tableX, ty, tableW, stageH).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, stageH).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('운성', tableX, ty + 10, { width: labelColW, align: 'center' });
+  const stageY = getCenteredTextY(ty, stageH, 9);
+  doc.text('운성', tableX, stageY, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
     const keys = ['hour', 'day', 'month', 'year'] as const;
     const stageVal = result.twelveStages?.bong?.[keys[i]] || '-';
-    doc.font(koreanFont).fontSize(11).fillColor('#374151');
-    doc.text(stageVal, tableX + labelColW + i * colW, ty + 9, { width: colW, align: 'center' });
+    doc.font(koreanFont).fontSize(10).fillColor('#374151');
+    doc.text(stageVal, tableX + labelColW + i * colW, stageY, { width: colW, align: 'center' });
   }
-  ty += 30;
+  ty += stageH;
 
-  // ─── 신살 행 (높이 동적 조절) ───
-  // 신살 텍스트 길이 확인
+  // ─── 신살 행 ───
   const pillars_order = ['hour', 'day', 'month', 'year'] as const;
-  let maxSinsalHeight = 30;
+  let maxSinsalHeight = 45;
   for (let i = 0; i < 4; i++) {
     const currentPillar = pillars_order[i];
     const sinsalForPillar = result.sinsal?.filter(s => s.pillar === currentPillar).map(s => s.name) || [];
     const sinsalText = sinsalForPillar.length > 0 ? sinsalForPillar.join(',') : '-';
-    doc.font(koreanFont).fontSize(9.5);
-    const h = doc.heightOfString(sinsalText, { width: colW - 10, lineGap: 3 });
-    maxSinsalHeight = Math.max(maxSinsalHeight, h + 16);
+    doc.font(koreanFont).fontSize(9);
+    const h = doc.heightOfString(sinsalText, { width: colW - 10, lineGap: 2 });
+    maxSinsalHeight = Math.max(maxSinsalHeight, h + 18);
   }
-  maxSinsalHeight = Math.min(maxSinsalHeight, 60); // 최대 60
+  maxSinsalHeight = Math.min(maxSinsalHeight, 70);
 
-  doc.rect(tableX, ty, tableW, maxSinsalHeight).strokeColor('#e2e8f0').stroke();
+  doc.rect(tableX, ty, tableW, maxSinsalHeight).fill('#ffffff');
+  doc.rect(tableX, ty, tableW, maxSinsalHeight).strokeColor('#d1d5db').stroke();
   doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('신살', tableX, ty + 10, { width: labelColW, align: 'center' });
+  const sinsalY = getCenteredTextY(ty, maxSinsalHeight, 9);
+  doc.text('신살', tableX, sinsalY, { width: labelColW, align: 'center' });
   for (let i = 0; i < 4; i++) {
     const currentPillar = pillars_order[i];
     const sinsalForPillar = result.sinsal?.filter(s => s.pillar === currentPillar).map(s => s.name) || [];
     const sinsalText = sinsalForPillar.length > 0 ? sinsalForPillar.join(',') : '-';
-    doc.font(koreanFont).fontSize(9.5).fillColor('#374151');
-    doc.text(sinsalText, tableX + labelColW + i * colW, ty + 8, { width: colW - 10, align: 'center', lineGap: 3 });
+    doc.font(koreanFont).fontSize(9).fillColor('#374151');
+    doc.text(sinsalText, tableX + labelColW + i * colW, sinsalY, { width: colW - 10, align: 'center', lineGap: 2 });
   }
   ty += maxSinsalHeight;
 
   // ─── 세로 구분선 그리기 ───
-  const tableTop = 185;
+  const tableTop = 150;
   const tableBottom = ty;
   // 라벨 컬럼 구분선
-  doc.moveTo(tableX + labelColW, tableTop).lineTo(tableX + labelColW, tableBottom).strokeColor('#e2e8f0').stroke();
+  doc.moveTo(tableX + labelColW, tableTop).lineTo(tableX + labelColW, tableBottom).strokeColor('#d1d5db').lineWidth(0.5).stroke();
   for (let i = 1; i < 4; i++) {
-    doc.moveTo(tableX + labelColW + i * colW, tableTop).lineTo(tableX + labelColW + i * colW, tableBottom).strokeColor('#e2e8f0').stroke();
+    doc.moveTo(tableX + labelColW + i * colW, tableTop).lineTo(tableX + labelColW + i * colW, tableBottom).strokeColor('#d1d5db').lineWidth(0.5).stroke();
   }
   // 전체 외곽선
-  doc.rect(tableX, tableTop, tableW, tableBottom - tableTop).strokeColor('#d1d5db').stroke();
+  doc.rect(tableX, tableTop, tableW, tableBottom - tableTop).strokeColor('#374151').lineWidth(1.5).stroke();
 
-  // ─── 용신분석 박스 (sajulab.kr 스타일) ───
-  ty += 25;
-  const boxH = 65;
-  doc.roundedRect(tableX, ty, tableW, boxH, 8).fill('#f8f7f4');
-  doc.roundedRect(tableX, ty, tableW, boxH, 8).strokeColor('#e2e8f0').stroke();
+  // ─── 용신분석 박스 ───
+  ty += 20;
+  const boxH = 70;
+  doc.roundedRect(tableX, ty, tableW, boxH, 8).fill('#f3f0ed');
+  doc.roundedRect(tableX, ty, tableW, boxH, 8).strokeColor('#d1d5db').lineWidth(1).stroke();
 
-  doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
-  doc.text('용신분석', tableX + 20, ty + 12);
-  doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-  doc.text('오행의 조화와 균형', tableX + 20, ty + 30);
+  doc.font(koreanBoldFont).fontSize(13).fillColor('#1f2937');
+  doc.text('용신분석', tableX + 16, ty + 12);
+  doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
+  doc.text('오행의 조화와 균형', tableX + 16, ty + 30);
 
   // 용신/희신/기신/구신/한신 배지
   const ys = result.yongShinSystem;
   const gods = [
-    { label: '용신', value: result.yongSin, color: '#6b7280' },
-    { label: '희신', value: ys?.huiSin || '화', color: '#c47d5e' },
-    { label: '기신', value: result.giSin, color: '#5a7a6b' },
-    { label: '구신', value: ys?.guSin || '수', color: '#5c7d8e' },
-    { label: '한신', value: ys?.hanSin || '금', color: '#c4a055' },
+    { label: '용신', value: result.yongSin },
+    { label: '희신', value: ys?.huiSin || '화' },
+    { label: '기신', value: result.giSin },
+    { label: '구신', value: ys?.guSin || '수' },
+    { label: '한신', value: ys?.hanSin || '금' },
   ];
-  const badgeStartX = tableX + 155;
-  const badgeW = 52;
+  const badgeStartX = tableX + 140;
+  const badgeW = 58;
   for (let i = 0; i < gods.length; i++) {
-    const bx = badgeStartX + i * (badgeW + 8);
+    const bx = badgeStartX + i * (badgeW + 6);
     const g = gods[i];
-    const elColor = ELEMENT_COLORS[g.value] || g.color;
-    doc.roundedRect(bx, ty + 12, badgeW, 38, 6).fill('#ffffff');
-    doc.roundedRect(bx, ty + 12, badgeW, 38, 6).strokeColor('#e2e8f0').stroke();
+    const elColor = ELEMENT_COLORS[g.value] || '#374151';
+    doc.roundedRect(bx, ty + 12, badgeW, 48, 6).fill('#ffffff');
+    doc.roundedRect(bx, ty + 12, badgeW, 48, 6).strokeColor('#d1d5db').stroke();
     doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
-    doc.text(g.label, bx, ty + 15, { width: badgeW, align: 'center' });
-    doc.font(koreanBoldFont).fontSize(16).fillColor(elColor);
-    doc.text(ELEMENT_HANJA[g.value] || g.value, bx, ty + 28, { width: badgeW, align: 'center' });
+    doc.text(g.label, bx, ty + 16, { width: badgeW, align: 'center' });
+    doc.font(koreanBoldFont).fontSize(18).fillColor(elColor);
+    const badgeCenterY = getCenteredTextY(ty + 12, 48, 18);
+    doc.text(ELEMENT_HANJA[g.value] || g.value, bx, badgeCenterY, { width: badgeW, align: 'center' });
   }
 }
 
@@ -1691,11 +1746,11 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   doc.text('오행 분포도', margin + 16, y + 14);
 
   const elements = [
-    { label: '나무', hanja: '木', value: elementDistribution.wood, color: '#5a7a6b' },
-    { label: '불', hanja: '火', value: elementDistribution.fire, color: '#c47d5e' },
+    { label: '나무', hanja: '木', value: elementDistribution.wood, color: '#6ab06a' },
+    { label: '불', hanja: '火', value: elementDistribution.fire, color: '#e8786f' },
     { label: '흙', hanja: '土', value: elementDistribution.earth, color: '#c4a055' },
-    { label: '금', hanja: '金', value: elementDistribution.metal, color: '#8c8c8c' },
-    { label: '물', hanja: '水', value: elementDistribution.water, color: '#5c7d8e' },
+    { label: '금', hanja: '金', value: elementDistribution.metal, color: '#8e8e8e' },
+    { label: '물', hanja: '水', value: elementDistribution.water, color: '#4a90d9' },
   ];
 
   const totalElements = elements.reduce((s, e) => s + e.value, 0) || 1;
@@ -1710,10 +1765,11 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
     const barW = (pct / 100) * barMaxW;
     const centerY = ey + rowH / 2;
 
-    // 한자 원형 아이콘 - 컬러 배경 + 흰색 텍스트 (sajulab.kr 스타일)
+    // 한자 원형 아이콘 - 컬러 배경 + 흰색 텍스트 (forceteller 스타일)
     doc.circle(margin + 38, centerY, circleR).fill(el.color);
     doc.font(koreanBoldFont).fontSize(17).fillColor('#ffffff');
-    doc.text(el.hanja, margin + 38 - circleR, centerY - 10, { width: circleR * 2, align: 'center' });
+    const circleTextY = centerY - 17 * 0.45;
+    doc.text(el.hanja, margin + 38 - circleR, circleTextY, { width: circleR * 2, align: 'center' });
 
     // 한글 레이블
     doc.font(koreanFont).fontSize(13).fillColor('#374151');
@@ -1728,7 +1784,8 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
       // 퍼센트 텍스트 (바 안에)
       if (pct > 8) {
         doc.font(koreanBoldFont).fontSize(10).fillColor('#ffffff');
-        doc.text(`${pct}%`, barLeft, centerY - 6, { width: Math.max(barW, 26), align: 'center' });
+        const pctTextY = centerY - 10 * 0.45;
+        doc.text(`${pct}%`, barLeft, pctTextY, { width: Math.max(barW, 26), align: 'center' });
       }
     } else {
       // 0%일 때도 텍스트 표시
@@ -1748,7 +1805,7 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   const halfW = (contentW - 20) / 2;
 
   // 음양이란
-  doc.circle(margin + 8, y + 8, 5).fill('#c47d5e');
+  doc.circle(margin + 8, y + 8, 5).fill('#e8786f');
   doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
   doc.text('음양이란', margin + 20, y + 2);
   doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
@@ -1758,7 +1815,7 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   );
 
   // 오행이란
-  doc.circle(margin + halfW + 28, y + 8, 5).fill('#5a7a6b');
+  doc.circle(margin + halfW + 28, y + 8, 5).fill('#6ab06a');
   doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
   doc.text('오행이란', margin + halfW + 40, y + 2);
   doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
