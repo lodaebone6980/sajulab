@@ -178,16 +178,14 @@ function generateNarrativePdf(
   const isNewYear = options.productCode === 'saju-newyear';
   const isPremium = options.productCode === 'saju-premium';
 
+  // sajulab.kr 동일 구조: 표지 → 인사말 → 목차 → 사주원국표 → 오행분포도 → 십신분포 → 본문
+
   // 1. 표지
   renderNarrativeCoverPage(doc, result, options, koreanFont, koreanBoldFont);
 
   // 2. 인사말 페이지 (큰 폰트, 넓은 줄간격)
   doc.addPage();
   renderGreetingPageLarge(doc, options.customerName, narrative.greeting, koreanFont, koreanBoldFont);
-
-  // 2.5 분석 안내 페이지
-  doc.addPage();
-  renderAnalysisGuidePage(doc, options, koreanFont, koreanBoldFont);
 
   // 3. 목차
   doc.addPage();
@@ -197,50 +195,26 @@ function generateNarrativePdf(
   doc.addPage();
   renderFourPillars(doc, result, koreanFont, koreanBoldFont);
 
-  // 4.5 사주원국 해설 페이지
-  doc.addPage();
-  renderFourPillarsExplanation(doc, result, koreanFont, koreanBoldFont);
-
-  // 5. 용신분석 5체계 + 오행분포
+  // 5. 오행분포도
   doc.addPage();
   renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
 
-  // 5.5 십신 분포 페이지
+  // 6. 십신 분포 페이지
   doc.addPage();
   renderTenGodDistribution(doc, result, koreanFont, koreanBoldFont);
 
-  // 6. 5대 운세 점수 차트 (신년운세/프리미엄)
-  if (isNewYear || isPremium) {
-    doc.addPage();
-    renderFortuneScoreChart(doc, result, options, koreanFont, koreanBoldFont);
-    // 6.5 운세 점수 해설 페이지
-    doc.addPage();
-    renderFortuneScoreExplanation(doc, result, options, koreanFont, koreanBoldFont);
-  }
-
-  // 6.7 월별 운세 차트 (신년운세/프리미엄)
-  if ((isNewYear || isPremium) && result.monthFortunes && result.monthFortunes.length > 0) {
-    doc.addPage();
-    renderMonthFortunePage(doc, result, koreanFont, koreanBoldFont);
-  }
-
   // 7. 각 챕터별 내러티브 (챕터 타이틀 페이지 + 본문)
+  const isBasic = options.productCode === 'saju-basic';
   for (const chapter of narrative.chapters) {
-    // 챕터 타이틀 페이지 (어두운 배경)
-    doc.addPage();
-    renderChapterTitlePage(doc, chapter, koreanFont, koreanBoldFont);
+    // 기본분석은 챕터 타이틀 페이지 생략 (sajulab.kr 동일)
+    if (!isBasic) {
+      doc.addPage();
+      renderChapterTitlePage(doc, chapter, koreanFont, koreanBoldFont);
+    }
     // 챕터 본문 (큰 폰트, 넓은 줄간격)
     doc.addPage();
     renderNarrativeChapterLarge(doc, chapter, koreanFont, koreanBoldFont);
   }
-
-  // 8. 용어 해설 페이지
-  doc.addPage();
-  renderGlossaryPage(doc, koreanFont, koreanBoldFont);
-
-  // 9. 마무리 페이지
-  doc.addPage();
-  renderOutroPage(doc, options, koreanFont, koreanBoldFont);
 }
 
 // ─── 내러티브 표지 (sajulab.kr 스타일) ───
@@ -611,8 +585,8 @@ function renderNarrativeChapterLarge(
   const { width } = doc.page;
   const margin = 70;
   const contentWidth = width - margin * 2;
-  const fontSize = 13;
-  const lineGap = 14;
+  const fontSize = 13.5;    // sajulab.kr 기준 ~13-14pt
+  const lineGap = 16;       // sajulab.kr 기준 ~1.8-2x 행간
   const pageBottom = 700;
 
   // 상단 헤더 바
@@ -1508,30 +1482,14 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한글 + 한자 병기 (나란히 — 병丙 스타일)
-    const koText = p.heavenlyStemKo;
-    const hjText = p.heavenlyStem;
-    const koFontSize = 28;
-    const hjFontSize = 18;
+    // sajulab.kr 스타일: 한자만 크게 표시 (丙, 庚 등)
+    const hanjaText = p.heavenlyStem;
+    const hanjaFontSize = 36;
 
-    // Measure widths
-    doc.font(koreanBoldFont).fontSize(koFontSize);
-    const koWidth = doc.widthOfString(koText);
-    doc.font(koreanFont).fontSize(hjFontSize);
-    const hjWidth = doc.widthOfString(hjText);
+    const centerY = getCenteredTextY(ty, stemH, hanjaFontSize);
 
-    const totalW = koWidth + hjWidth + 2; // 2px gap
-    const startX = cellX + (colW - totalW) / 2;
-    const centerY = getCenteredTextY(ty, stemH, koFontSize);
-
-    // Korean
-    doc.font(koreanBoldFont).fontSize(koFontSize).fillColor(stemColor);
-    doc.text(koText, startX, centerY, { lineBreak: false });
-
-    // Hanja (baseline aligned but slightly lower due to smaller size)
-    doc.font(koreanFont).fontSize(hjFontSize).fillColor(stemColor);
-    const hjY = centerY + (koFontSize - hjFontSize) * 0.4; // align baselines roughly
-    doc.text(hjText, startX + koWidth + 2, hjY, { lineBreak: false });
+    doc.font(koreanBoldFont).fontSize(hanjaFontSize).fillColor(stemColor);
+    doc.text(hanjaText, cellX, centerY, { width: colW, align: 'center', lineBreak: false });
 
     // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
@@ -1567,30 +1525,14 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한글 + 한자 병기 (나란히 — 병丙 스타일)
-    const koText = p.earthlyBranchKo;
-    const hjText = p.earthlyBranch;
-    const koFontSize = 28;
-    const hjFontSize = 18;
+    // sajulab.kr 스타일: 한자만 크게 표시 (子, 午 등)
+    const hanjaText = p.earthlyBranch;
+    const hanjaFontSize = 36;
 
-    // Measure widths
-    doc.font(koreanBoldFont).fontSize(koFontSize);
-    const koWidth = doc.widthOfString(koText);
-    doc.font(koreanFont).fontSize(hjFontSize);
-    const hjWidth = doc.widthOfString(hjText);
+    const centerY = getCenteredTextY(ty, branchH, hanjaFontSize);
 
-    const totalW = koWidth + hjWidth + 2; // 2px gap
-    const startX = cellX + (colW - totalW) / 2;
-    const centerY = getCenteredTextY(ty, branchH, koFontSize);
-
-    // Korean
-    doc.font(koreanBoldFont).fontSize(koFontSize).fillColor(branchColor);
-    doc.text(koText, startX, centerY, { lineBreak: false });
-
-    // Hanja (baseline aligned but slightly lower due to smaller size)
-    doc.font(koreanFont).fontSize(hjFontSize).fillColor(branchColor);
-    const hjY = centerY + (koFontSize - hjFontSize) * 0.4; // align baselines roughly
-    doc.text(hjText, startX + koWidth + 2, hjY, { lineBreak: false });
+    doc.font(koreanBoldFont).fontSize(hanjaFontSize).fillColor(branchColor);
+    doc.text(hanjaText, cellX, centerY, { width: colW, align: 'center', lineBreak: false });
 
     // 음양+오행 표시 (우측 하단)
     const isYang = p.yinYangKo === '양';
