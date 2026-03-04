@@ -1,3 +1,2 @@
-[[volumes]]
-mount = "/data"
-name = "sajulab-data"
+# Volume is attached via Railway dashboard (sajulab-volume-H1Dw → /data)
+# No config-as-code volume definition needed
