@@ -6,7 +6,11 @@ import type { NarrativeResult } from '@/lib/ai';
 import { generateSajuPdfFromHtml } from './html-to-pdf';
 
 const FONTS_DIR = path.join(process.cwd(), 'fonts');
-// NotoSansKR: 한글 + 한자(CJK) + 라틴 모두 지원
+// Pretendard: 행간이 타이트한 한국 표준 디자인 폰트 (sajulab.kr 스타일)
+// NotoSansKR 대비 17.6% 컴팩트한 vertical metrics → 행간/여백 문제 해결
+const FONT_PRETENDARD_REGULAR = path.join(FONTS_DIR, 'Pretendard-Regular.otf');
+const FONT_PRETENDARD_BOLD = path.join(FONTS_DIR, 'Pretendard-Bold.otf');
+// NotoSansKR: 한자(CJK) 지원 폴백
 const FONT_REGULAR = path.join(FONTS_DIR, 'NotoSansKR-Regular.ttf');
 const FONT_BOLD = path.join(FONTS_DIR, 'NotoSansKR-Bold.ttf');
 // NanumGothic 폴백
@@ -82,51 +86,65 @@ function generatePdfKitFallback(
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Check font file existence - prefer NotoSansKR (한글+한자), fallback to NanumGothic
+      // Pretendard 우선 → NotoSansKR 폴백 → NanumGothic 폴백
       let koreanFont = 'Helvetica';
       let koreanBoldFont = 'Helvetica-Bold';
 
+      const pretendardRegularExists = fs.existsSync(FONT_PRETENDARD_REGULAR);
+      const pretendardBoldExists = fs.existsSync(FONT_PRETENDARD_BOLD);
       const notoRegularExists = fs.existsSync(FONT_REGULAR);
       const notoBoldExists = fs.existsSync(FONT_BOLD);
       const nanumRegularExists = fs.existsSync(FONT_NANUM_REGULAR);
       const nanumBoldExists = fs.existsSync(FONT_NANUM_BOLD);
 
-      // Font diagnostic logging
-      console.log(`[PDF] Font check: NotoSansKR-Regular=${notoRegularExists} (${notoRegularExists ? fs.statSync(FONT_REGULAR).size : 0}), Bold=${notoBoldExists} (${notoBoldExists ? fs.statSync(FONT_BOLD).size : 0})`);
-      console.log(`[PDF] Font check: NanumGothic-Regular=${nanumRegularExists}, Bold=${nanumBoldExists}`);
+      console.log(`[PDF] Font check: Pretendard=${pretendardRegularExists}/${pretendardBoldExists}, NotoSansKR=${notoRegularExists}/${notoBoldExists}, NanumGothic=${nanumRegularExists}/${nanumBoldExists}`);
 
-      if (notoRegularExists && notoBoldExists) {
+      let fontRegistered = false;
+
+      // 1순위: Pretendard (행간 타이트, 한글+라틴 완벽)
+      if (pretendardRegularExists && pretendardBoldExists) {
+        try {
+          doc.registerFont('Korean', FONT_PRETENDARD_REGULAR);
+          doc.registerFont('KoreanBold', FONT_PRETENDARD_BOLD);
+          koreanFont = 'Korean';
+          koreanBoldFont = 'KoreanBold';
+          fontRegistered = true;
+          console.log('[PDF] Pretendard 폰트 등록 성공 (컴팩트 행간)');
+        } catch (err) {
+          console.warn('[PDF] Pretendard 등록 실패:', err);
+        }
+      }
+
+      // 2순위: NotoSansKR (한자 지원 but 행간 넓음)
+      if (!fontRegistered && notoRegularExists && notoBoldExists) {
         try {
           doc.registerFont('Korean', FONT_REGULAR);
           doc.registerFont('KoreanBold', FONT_BOLD);
           koreanFont = 'Korean';
           koreanBoldFont = 'KoreanBold';
-          console.log('[PDF] NotoSansKR 폰트 등록 성공 (한글+한자 지원)');
+          fontRegistered = true;
+          console.log('[PDF] NotoSansKR 폰트 등록 (한자 지원, 행간 넓음)');
         } catch (err) {
-          console.warn('[PDF] NotoSansKR 등록 실패, NanumGothic 시도:', err);
-          if (nanumRegularExists && nanumBoldExists) {
-            try {
-              doc.registerFont('Korean', FONT_NANUM_REGULAR);
-              doc.registerFont('KoreanBold', FONT_NANUM_BOLD);
-              koreanFont = 'Korean';
-              koreanBoldFont = 'KoreanBold';
-            } catch (err2) {
-              console.warn('[PDF] NanumGothic도 실패, Helvetica 사용:', err2);
-            }
-          }
+          console.warn('[PDF] NotoSansKR 등록 실패:', err);
         }
-      } else if (nanumRegularExists && nanumBoldExists) {
+      }
+
+      // 3순위: NanumGothic
+      if (!fontRegistered && nanumRegularExists && nanumBoldExists) {
         try {
           doc.registerFont('Korean', FONT_NANUM_REGULAR);
           doc.registerFont('KoreanBold', FONT_NANUM_BOLD);
           koreanFont = 'Korean';
           koreanBoldFont = 'KoreanBold';
-          console.log('[PDF] NanumGothic 폰트 등록 (한자 미지원)');
+          fontRegistered = true;
+          console.log('[PDF] NanumGothic 폰트 등록');
         } catch (err) {
           console.warn('[PDF] 폰트 등록 실패, Helvetica 사용:', err);
         }
-      } else {
-        console.warn(`[PDF] 폰트 파일 없음. Helvetica 사용.`);
+      }
+
+      if (!fontRegistered) {
+        console.warn('[PDF] 폰트 파일 없음. Helvetica 사용.');
       }
 
       // AI(GPT) 내러티브가 있으면 AI 기반 PDF, 없으면 sajulab.kr 동일 구조
