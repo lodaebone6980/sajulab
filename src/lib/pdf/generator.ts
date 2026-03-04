@@ -1709,22 +1709,22 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
 
   // ─── 헤더 ───
   doc.font(koreanFont).fontSize(10).fillColor('#9ca3af');
-  doc.text('음양오행', 0, 50, { align: 'center', width });
+  doc.text('음양오행', 0, 40, { align: 'center', width });
   doc.font(koreanBoldFont).fontSize(22).fillColor('#1f2937');
-  doc.text('나를 구성하는 에너지의 균형', 0, 68, { align: 'center', width });
+  doc.text('나를 구성하는 에너지의 균형', 0, 56, { align: 'center', width });
 
   // ─── 음양의 조화 박스 ───
-  let y = 110;
-  const yinYangBox = { x: margin, y, w: contentW, h: 65 };
+  let y = 90;
+  const yinYangBox = { x: margin, y, w: contentW, h: 58 };
   doc.roundedRect(yinYangBox.x, yinYangBox.y, yinYangBox.w, yinYangBox.h, 8).fill('#f8f7f4');
   doc.roundedRect(yinYangBox.x, yinYangBox.y, yinYangBox.w, yinYangBox.h, 8).strokeColor('#e8e5de').stroke();
 
   doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
-  doc.text('음양의 조화', margin + 16, y + 10);
+  doc.text('음양의 조화', margin + 16, y + 8);
 
   // 음양 바
-  const barY = y + 30;
-  const barH = 24;
+  const barY = y + 28;
+  const barH = 22;
   const totalPillars = 8;
   // 사주 8자(천간4+지지4) 각각의 음양을 개별 계산
   const fp = result.fourPillars;
@@ -1754,12 +1754,15 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   }
 
   // ─── 오행 분포도 박스 ───
-  y = 195;
-  doc.roundedRect(margin, y, contentW, 265, 8).fill('#f8f7f4');
-  doc.roundedRect(margin, y, contentW, 265, 8).strokeColor('#e8e5de').stroke();
+  y = 160;
+  const rowH = 38;
+  const circleR = 15;
+  const elemBoxH = 36 + rowH * 5 + 8; // 타이틀영역 + 행 5개 + 하단패딩
+  doc.roundedRect(margin, y, contentW, elemBoxH, 8).fill('#f8f7f4');
+  doc.roundedRect(margin, y, contentW, elemBoxH, 8).strokeColor('#e8e5de').stroke();
 
   doc.font(koreanBoldFont).fontSize(11).fillColor('#374151');
-  doc.text('오행 분포도', margin + 16, y + 14);
+  doc.text('오행 분포도', margin + 16, y + 12);
 
   const elements = [
     { label: '나무', hanja: '木', value: elementDistribution.wood, color: '#6ab06a' },
@@ -1770,54 +1773,51 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
   ];
 
   const totalElements = elements.reduce((s, e) => s + e.value, 0) || 1;
-  const barLeft = margin + 120;
-  const barMaxW = contentW - 190;
-  let ey = y + 42;
-  const rowH = 42;
-  const circleR = 16;
+  const barLeft = margin + 115;
+  const barMaxW = contentW - 180;
+  let ey = y + 36;
+  const barH2 = 24;
 
   for (const el of elements) {
     const pct = Math.round((el.value / totalElements) * 100);
     const barW = (pct / 100) * barMaxW;
     const centerY = ey + rowH / 2;
 
-    // 한자 원형 아이콘 - 컬러 배경 + 흰색 텍스트 (forceteller 스타일)
-    doc.circle(margin + 38, centerY, circleR).fill(el.color);
-    doc.font(koreanBoldFont).fontSize(17).fillColor('#ffffff');
-    const circleTextY = centerY - 17 * 0.55;
-    doc.text(el.hanja, margin + 38 - circleR, circleTextY, { width: circleR * 2, align: 'center' });
+    // 한자 원형 아이콘 - getCenteredTextY로 정확한 중앙 정렬
+    doc.circle(margin + 36, centerY, circleR).fill(el.color);
+    doc.font(koreanBoldFont).fontSize(16).fillColor('#ffffff');
+    doc.text(el.hanja, margin + 36 - circleR, getCenteredTextY(centerY - circleR, circleR * 2, 16), { width: circleR * 2, align: 'center' });
 
-    // 한글 레이블
+    // 한글 레이블 - 동일한 중앙 정렬 로직
     doc.font(koreanFont).fontSize(13).fillColor('#374151');
-    doc.text(el.label, margin + 64, centerY - 13 * 0.55, { width: 45 });
+    doc.text(el.label, margin + 60, getCenteredTextY(centerY - rowH / 2, rowH, 13), { width: 45 });
 
     // 바 배경 (둥근 끝)
-    doc.roundedRect(barLeft, centerY - 13, barMaxW, 26, 13).fill('#e8e5de');
+    doc.roundedRect(barLeft, centerY - barH2 / 2, barMaxW, barH2, barH2 / 2).fill('#e8e5de');
 
     // 바 채움
     if (barW > 0) {
-      doc.roundedRect(barLeft, centerY - 13, Math.max(barW, 26), 26, 13).fill(el.color);
+      doc.roundedRect(barLeft, centerY - barH2 / 2, Math.max(barW, barH2), barH2, barH2 / 2).fill(el.color);
       // 퍼센트 텍스트 (바 안에)
       if (pct > 8) {
         doc.font(koreanBoldFont).fontSize(10).fillColor('#ffffff');
-        const pctTextY = centerY - 10 * 0.55;
-        doc.text(`${pct}%`, barLeft, pctTextY, { width: Math.max(barW, 26), align: 'center' });
+        doc.text(`${pct}%`, barLeft, getCenteredTextY(centerY - barH2 / 2, barH2, 10), { width: Math.max(barW, barH2), align: 'center' });
       }
     } else {
       // 0%일 때도 텍스트 표시
       doc.font(koreanFont).fontSize(10).fillColor('#9ca3af');
-      doc.text('0%', barLeft + 8, centerY - 6);
+      doc.text('0%', barLeft + 8, getCenteredTextY(centerY - barH2 / 2, barH2, 10));
     }
 
-    // 개수
+    // 개수 - 동일한 중앙 정렬
     doc.font(koreanFont).fontSize(12).fillColor('#374151');
-    doc.text(`${el.value}개`, barLeft + barMaxW + 14, centerY - 12 * 0.55);
+    doc.text(`${el.value}개`, barLeft + barMaxW + 12, getCenteredTextY(centerY - rowH / 2, rowH, 12));
 
     ey += rowH;
   }
 
   // ─── 음양이란 / 오행이란 설명 ───
-  y = 475;
+  y = ey + 16; // 오행 분포도 바로 아래에 배치
   const halfW = (contentW - 20) / 2;
 
   // 음양이란
