@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Fragment } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp, Play, CheckSquare } from 'lucide-react';
 
 interface Order {
   id: number;
@@ -92,6 +92,10 @@ export default function OrdersPage() {
 
   // 재분석
   const [reanalyzingId, setReanalyzingId] = useState<number | null>(null);
+
+  // 체크박스 선택
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
 
   const periods = [
     { value: 'today', label: '오늘' },
@@ -411,6 +415,61 @@ export default function OrdersPage() {
     }
   };
 
+  // === 체크박스 ===
+  const toggleSelectOrder = (orderId: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(orderId)) {
+        next.delete(orderId);
+      } else {
+        next.add(orderId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === orders.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(orders.map(o => o.id)));
+    }
+  };
+
+  // 선택된 대기/실패 주문 필터
+  const selectedPendingOrders = orders.filter(
+    o => selectedIds.has(o.id) && (o.status === 'pending' || o.status === 'failed')
+  );
+
+  // === 일괄 실행 ===
+  const handleBatchProcess = async () => {
+    if (selectedPendingOrders.length === 0) return;
+    setIsBatchProcessing(true);
+    try {
+      const res = await fetch('/api/orders/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: selectedPendingOrders.map(o => o.id) }),
+      });
+      if (res.ok) {
+        setSelectedIds(new Set());
+        // 1초 후 새로고침 (상태 반영)
+        setTimeout(() => fetchOrders(), 1000);
+        // 5초마다 자동 새로고침 (완료 감지)
+        const interval = setInterval(() => {
+          fetchOrders().then(() => {
+            // 모든 주문이 완료/실패이면 새로고침 중단
+          });
+        }, 5000);
+        setTimeout(() => clearInterval(interval), 120000); // 최대 2분
+      }
+    } catch (err) {
+      console.error('Batch process failed:', err);
+    } finally {
+      setIsBatchProcessing(false);
+    }
+  };
+
   const saveExtraAnswer = async (orderId: number) => {
     setIsSavingAnswer(true);
     try {
@@ -533,6 +592,30 @@ export default function OrdersPage() {
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-gray-900">작업 목록</h2>
               <span className="text-sm text-gray-400">총 {total}건</span>
+              {selectedIds.size > 0 && (
+                <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">
+                  {selectedIds.size}건 선택
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedPendingOrders.length > 0 && (
+                <button
+                  onClick={handleBatchProcess}
+                  disabled={isBatchProcessing}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
+                >
+                  <Play size={14} />
+                  {isBatchProcessing ? '처리 중...' : `실행 (${selectedPendingOrders.length}건)`}
+                </button>
+              )}
+              <button
+                onClick={() => fetchOrders()}
+                className="flex items-center gap-1 text-gray-500 hover:text-gray-700 text-sm px-2 py-1.5 rounded-lg hover:bg-gray-50"
+                title="새로고침"
+              >
+                <RefreshCw size={14} />
+              </button>
             </div>
           </div>
 
@@ -542,7 +625,12 @@ export default function OrdersPage() {
                 <thead>
                   <tr className="border-b border-gray-100 bg-gray-50/50">
                     <th className="px-4 py-3 w-10">
-                      <input type="checkbox" className="rounded border-gray-300" />
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300 text-blue-600 cursor-pointer"
+                        checked={orders.length > 0 && selectedIds.size === orders.length}
+                        onChange={toggleSelectAll}
+                      />
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">#</th>
                     <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">고객명</th>
@@ -559,7 +647,12 @@ export default function OrdersPage() {
                     <Fragment key={order.id}>
                       <tr className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-3">
-                          <input type="checkbox" className="rounded border-gray-300" />
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300 text-blue-600 cursor-pointer"
+                            checked={selectedIds.has(order.id)}
+                            onChange={() => toggleSelectOrder(order.id)}
+                          />
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-400">{idx + 1}</td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-medium">{order.customer_name}</td>
