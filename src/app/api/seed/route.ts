@@ -13,7 +13,83 @@ import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
 import path from 'path';
 import fs from 'fs';
 
+export async function GET(request: NextRequest) {
+  return handleSeed(request);
+}
+
 export async function POST(request: NextRequest) {
+  return handleSeed(request);
+}
+
+// ─── 주문 1건씩 백그라운드 처리 ───
+async function processOrder(
+  orderId: number,
+  userId: number,
+  customerData: { name: string; gender: string; birthDate: string; birthTime: string; calendarType: string },
+  product: { id: number; name: string; code: string },
+  pdfDir: string,
+) {
+  try {
+    updateOrderStatus(orderId, userId, 'requested');
+
+    const birthDateParts = customerData.birthDate.split('-').map(Number);
+    const birthTimeParts = customerData.birthTime.split(':').map(Number);
+
+    const sajuResult = await analyzeSajuWithFortune({
+      year: birthDateParts[0],
+      month: birthDateParts[1],
+      day: birthDateParts[2],
+      hour: birthTimeParts[0],
+      minute: birthTimeParts[1],
+      gender: customerData.gender === 'male' ? 'male' : 'female',
+      isLunar: customerData.calendarType === 'lunar' || customerData.calendarType === 'leap',
+    });
+
+    updateOrderStatus(orderId, userId, 'analyzing');
+
+    // Generate AI narrative (or fallback)
+    let narrative = await generateNarrative(sajuResult, customerData.name, product.code);
+    if (!narrative) {
+      narrative = generateFallbackNarrative(sajuResult, customerData.name, product.code);
+    }
+
+    // Save narrative to DB
+    if (narrative) {
+      try {
+        saveNarrative(orderId, product.code, {
+          greeting: narrative.greeting,
+          chapters: JSON.stringify(narrative.chapters),
+          model: narrative.model || 'fallback',
+          promptTokens: narrative.tokenUsage?.input || 0,
+          completionTokens: narrative.tokenUsage?.output || 0,
+        });
+      } catch (e) {
+        console.warn(`[Seed] Narrative save warning for order ${orderId}:`, e);
+      }
+    }
+
+    // Generate PDF with narrative
+    updateOrderStatus(orderId, userId, 'pdf_generating');
+    const pdfBuffer = await generateSajuPdf(sajuResult, {
+      customerName: customerData.name,
+      productName: product.name,
+      productCode: product.code,
+      narrative,
+    });
+
+    // Save PDF
+    const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
+    fs.writeFileSync(pdfPath, pdfBuffer);
+
+    updateOrderStatus(orderId, userId, 'completed');
+    console.log(`[Seed] ✅ Order ${orderId} completed (${customerData.name} - ${product.code})`);
+  } catch (analysisError) {
+    console.error(`[Seed] ❌ Order ${orderId} failed:`, analysisError);
+    updateOrderStatus(orderId, userId, 'failed');
+  }
+}
+
+async function handleSeed(_request: NextRequest) {
   try {
     // Get the first user (admin or test user)
     const adminUser = findUserByEmail('admin@sajulab.kr');
@@ -69,8 +145,8 @@ export async function POST(request: NextRequest) {
       },
     ];
 
-    // Create customers and orders
-    const createdOrders = [];
+    // ── Phase 1: 즉시 고객 + 주문 생성 (동기, 빠름) ──
+    const createdOrders: { orderId: number; customerData: typeof customers[0]; product: any }[] = [];
     const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
     if (!fs.existsSync(pdfDir)) {
       fs.mkdirSync(pdfDir, { recursive: true });
@@ -90,7 +166,6 @@ export async function POST(request: NextRequest) {
 
       const customerId = customerResult.lastInsertRowid as number;
 
-      // Create order for each product
       for (const product of products) {
         const orderResult = createOrder(userId, {
           customer_id: customerId,
@@ -101,75 +176,31 @@ export async function POST(request: NextRequest) {
         });
 
         const orderId = orderResult.lastInsertRowid as number;
-        createdOrders.push(orderId);
-
-        // Perform analysis
-        try {
-          updateOrderStatus(orderId, userId, 'requested');
-
-          const birthDateParts = customerData.birthDate.split('-').map(Number);
-          const birthTimeParts = customerData.birthTime.split(':').map(Number);
-
-          const sajuResult = await analyzeSajuWithFortune({
-            year: birthDateParts[0],
-            month: birthDateParts[1],
-            day: birthDateParts[2],
-            hour: birthTimeParts[0],
-            minute: birthTimeParts[1],
-            gender: customerData.gender === 'male' ? 'male' : 'female',
-            isLunar: customerData.calendarType === 'lunar' || customerData.calendarType === 'leap',
-          });
-
-          updateOrderStatus(orderId, userId, 'analyzing');
-
-          // Generate AI narrative (or fallback)
-          let narrative = await generateNarrative(sajuResult, customerData.name, product.code);
-          if (!narrative) {
-            narrative = generateFallbackNarrative(sajuResult, customerData.name, product.code);
-          }
-
-          // Save narrative to DB
-          if (narrative) {
-            try {
-              saveNarrative(orderId, product.code, {
-                greeting: narrative.greeting,
-                chapters: JSON.stringify(narrative.chapters),
-                model: narrative.model || 'fallback',
-                promptTokens: narrative.tokenUsage?.input || 0,
-                completionTokens: narrative.tokenUsage?.output || 0,
-              });
-            } catch (e) {
-              console.warn(`[Seed] Narrative save warning for order ${orderId}:`, e);
-            }
-          }
-
-          // Generate PDF with narrative
-          const pdfBuffer = await generateSajuPdf(sajuResult, {
-            customerName: customerData.name,
-            productName: product.name,
-            productCode: product.code,
-            narrative,
-          });
-
-          // Save PDF
-          const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
-          fs.writeFileSync(pdfPath, pdfBuffer);
-
-          updateOrderStatus(orderId, userId, 'completed');
-        } catch (analysisError) {
-          console.error(`Analysis error for order ${orderId}:`, analysisError);
-          updateOrderStatus(orderId, userId, 'failed');
-        }
+        createdOrders.push({ orderId, customerData, product });
       }
     }
+
+    console.log(`[Seed] 📦 ${createdOrders.length}개 주문 생성 완료. 백그라운드 AI 분석 시작...`);
+
+    // ── Phase 2: 백그라운드에서 AI 분석 + PDF 생성 (fire-and-forget) ──
+    // 순차 처리 (OpenAI rate limit 방지)
+    const backgroundProcess = async () => {
+      for (const { orderId, customerData, product } of createdOrders) {
+        await processOrder(orderId, userId, customerData, product, pdfDir);
+      }
+      console.log(`[Seed] 🎉 모든 ${createdOrders.length}개 주문 백그라운드 처리 완료!`);
+    };
+
+    // fire-and-forget: 즉시 응답, 백그라운드에서 처리
+    backgroundProcess().catch(err => console.error('[Seed] Background processing error:', err));
 
     return NextResponse.json(
       {
         success: true,
-        message: `시드 데이터 생성 완료: ${customers.length}명의 고객, ${createdOrders.length}개의 주문`,
+        message: `시드 데이터 생성 시작: ${customers.length}명의 고객, ${createdOrders.length}개의 주문 (AI 분석은 백그라운드에서 진행 중)`,
         customers: customers.length,
         orders: createdOrders.length,
-        orderIds: createdOrders,
+        orderIds: createdOrders.map(o => o.orderId),
       },
       { status: 201 }
     );
