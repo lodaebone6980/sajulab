@@ -9,6 +9,7 @@ import {
   saveNarrative,
   saveFortuneData,
   findUserByEmail,
+  getPdfDir,
   getDb,
 } from '@/lib/db/index';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/google-drive';
@@ -114,8 +115,9 @@ async function processOrder(
       narrative,
     });
 
-    // Save PDF
-    const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
+    // Save PDF (use volume-aware path)
+    const actualPdfDir = getPdfDir();
+    const pdfPath = path.join(actualPdfDir, `${orderId}.pdf`);
     fs.writeFileSync(pdfPath, pdfBuffer);
 
     // Save pdf_url to DB
@@ -201,10 +203,7 @@ async function handleSeed(_request: NextRequest) {
 
     // ── Phase 1: 즉시 고객 + 주문 생성 (동기, 빠름) ──
     const createdOrders: { orderId: number; customerData: typeof customers[0]; product: any }[] = [];
-    const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
-    if (!fs.existsSync(pdfDir)) {
-      fs.mkdirSync(pdfDir, { recursive: true });
-    }
+    const pdfDir = getPdfDir();
 
     for (const customerData of customers) {
       const customerResult = createCustomer(userId, {

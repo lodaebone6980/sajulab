@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getOrderById } from '@/lib/db/index';
+import { getOrderById, getPdfDir } from '@/lib/db/index';
 import path from 'path';
 import fs from 'fs';
 
@@ -35,8 +35,8 @@ export async function GET(
       );
     }
 
-    // Try to load local PDF file first
-    const pdfPath = path.join(process.cwd(), 'data', 'pdfs', `${orderId}.pdf`);
+    // Try to load local PDF file first (volume-aware path)
+    const pdfPath = path.join(getPdfDir(), `${orderId}.pdf`);
     if (fs.existsSync(pdfPath)) {
       const pdfBuffer = fs.readFileSync(pdfPath);
       return new NextResponse(pdfBuffer, {

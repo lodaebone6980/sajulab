@@ -8,7 +8,9 @@ import {
   getProducts,
   updateOrderStatus,
   updateOrderResult,
+  updateOrderProgress,
   updateOrderDriveInfo,
+  getPdfDir,
   getDb,
 } from '@/lib/db/index';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/google-drive';
@@ -199,6 +201,7 @@ export async function POST(request: NextRequest) {
     try {
       // Mark as requested
       updateOrderStatus(orderId, userId, 'requested');
+      updateOrderProgress(orderId, userId, 3, '사주 데이터 분석 시작');
 
       // Perform analysis
       const birthDateParts = birthDate.split('-').map(Number);
@@ -216,6 +219,7 @@ export async function POST(request: NextRequest) {
 
       // Mark as analyzing
       updateOrderStatus(orderId, userId, 'analyzing');
+      updateOrderProgress(orderId, userId, 15, '사주 데이터 분석 완료');
 
       // Save result_json to database
       const resultJson = JSON.stringify(sajuResult);
@@ -243,10 +247,24 @@ export async function POST(request: NextRequest) {
 
       // Generate PDF (skip for saju-data product)
       if (product.code !== 'saju-data') {
-        updateOrderStatus(orderId, userId, 'pdf_generating');
+        updateOrderProgress(orderId, userId, 18, '내러티브 생성 준비');
+
+        // 챕터별 진행률 콜백
+        const onNarrativeProgress = (chapterNum: number, totalChapters: number, phase: string) => {
+          try {
+            if (phase === 'greeting_done') {
+              updateOrderProgress(orderId, userId, 20, '인사말 생성 완료');
+            } else if (phase === 'chapter_done') {
+              const chapterProgress = Math.round(20 + (chapterNum / totalChapters) * 68);
+              updateOrderProgress(orderId, userId, chapterProgress, `${chapterNum}/${totalChapters} 챕터 생성 완료`);
+            }
+          } catch (e) {
+            console.error('Progress update error (non-fatal):', e);
+          }
+        };
 
         // LLM 내러티브 생성 시도 (OpenAI API 키가 있으면)
-        let narrative = await generateNarrative(sajuResult, customerName, product.code);
+        let narrative = await generateNarrative(sajuResult, customerName, product.code, onNarrativeProgress);
 
         // API 키 없으면 fallback 내러티브 사용
         if (!narrative) {
@@ -268,6 +286,9 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        updateOrderStatus(orderId, userId, 'pdf_generating');
+        updateOrderProgress(orderId, userId, 90, 'PDF 파일 생성중');
+
         const pdfBuffer = await generateSajuPdf(sajuResult, {
           customerName,
           productName: product.name,
@@ -276,10 +297,7 @@ export async function POST(request: NextRequest) {
         });
 
         // Save PDF to file
-        const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
-        if (!fs.existsSync(pdfDir)) {
-          fs.mkdirSync(pdfDir, { recursive: true });
-        }
+        const pdfDir = getPdfDir();
         const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
         fs.writeFileSync(pdfPath, pdfBuffer);
 
@@ -288,9 +306,12 @@ export async function POST(request: NextRequest) {
         db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
           .run(`/api/orders/${orderId}/pdf`, orderId, userId);
 
+        updateOrderProgress(orderId, userId, 95, 'PDF 저장 완료');
+
         // Google Drive 업로드
         if (isDriveConfigured()) {
           try {
+            updateOrderProgress(orderId, userId, 97, 'Google Drive 업로드중');
             const driveFileName = `${customerName}_${product.code}_${orderId}.pdf`;
             const driveResult = await uploadPdfToDrive(pdfBuffer, driveFileName);
             updateOrderDriveInfo(orderId, userId, driveResult.fileId, driveResult.webViewLink);
@@ -299,6 +320,8 @@ export async function POST(request: NextRequest) {
             console.error(`[Drive] ❌ Upload failed for order ${orderId}:`, driveErr);
           }
         }
+
+        updateOrderProgress(orderId, userId, 99, '처리 완료');
       }
 
       // Mark as completed

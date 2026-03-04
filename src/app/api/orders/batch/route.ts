@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, updateOrderDriveInfo, saveFortuneData, saveNarrative, getDb } from '@/lib/db/index';
+import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, updateOrderDriveInfo, saveFortuneData, saveNarrative, getPdfDir, getDb } from '@/lib/db/index';
 import { uploadPdfToDrive, isDriveConfigured } from '@/lib/google-drive';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
@@ -121,10 +121,7 @@ async function processOneOrder(orderId: number, userId: number) {
       narrative,
     });
 
-    const pdfDir = path.join(process.cwd(), 'data', 'pdfs');
-    if (!fs.existsSync(pdfDir)) {
-      fs.mkdirSync(pdfDir, { recursive: true });
-    }
+    const pdfDir = getPdfDir();
     fs.writeFileSync(path.join(pdfDir, `${orderId}.pdf`), pdfBuffer);
 
     const db = getDb();

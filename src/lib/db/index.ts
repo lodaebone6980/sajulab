@@ -2,8 +2,22 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
 
-const DB_DIR = path.join(process.cwd(), 'data');
+// Railway Volume 마운트 경로 우선 사용 (영속 저장소)
+// 환경변수 RAILWAY_VOLUME_MOUNT_PATH가 설정되면 해당 경로 사용
+// 없으면 기존 process.cwd()/data 사용 (로컬 개발용)
+const VOLUME_PATH = process.env.RAILWAY_VOLUME_MOUNT_PATH;
+const DATA_ROOT = VOLUME_PATH || path.join(process.cwd(), 'data');
+const DB_DIR = VOLUME_PATH ? path.join(VOLUME_PATH, 'db') : path.join(process.cwd(), 'data');
 const DB_PATH = path.join(DB_DIR, 'saju.db');
+
+/** PDF 저장 디렉토리 (Volume 있으면 Volume 사용) */
+export function getPdfDir(): string {
+  const pdfDir = VOLUME_PATH ? path.join(VOLUME_PATH, 'pdfs') : path.join(process.cwd(), 'data', 'pdfs');
+  if (!fs.existsSync(pdfDir)) {
+    fs.mkdirSync(pdfDir, { recursive: true });
+  }
+  return pdfDir;
+}
 
 let db: Database.Database | null = null;
 
