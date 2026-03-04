@@ -67,27 +67,34 @@ async function generateChapterByChapter(
     greeting = `${customerName}님, 안녕하세요. 이 분석서가 삶의 좋은 나침반이 되기를 바랍니다.`;
   }
 
-  // 2. Generate each chapter separately
+  // 2. Generate each chapter separately with continuation for short outputs
   const chapters: NarrativeChapter[] = [];
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  const MIN_CHARS = 8000; // 최소 글자 수 - 미달 시 연속 호출
 
   for (const chDef of chapterDefs) {
-    const chapterPrompt = `다음 사주 데이터를 기반으로 "${chDef.title}" 챕터의 내용을 작성하세요.
+    const chapterPrompt = `다음은 프리미엄 사주 분석서의 한 챕터입니다. 반드시 매우 길고 상세하게 작성하세요.
 
-⚠️ 매우 중요:
-- 반드시 최소 8000자 이상을 작성하세요. 짧은 답변은 절대 허용되지 않습니다.
-- 고객을 반드시 "${customerName}님"으로 호칭하세요. "의뢰자님"이라는 호칭은 절대 사용하지 마세요.
-- 내용을 풍부하고 구체적으로 작성하세요: 원리 설명, 구체적 사례, 비유와 예시, 실천 방안, 주의사항을 모두 포함하세요.
-- 적절한 소제목(##)과 단락 구분을 사용하여 가독성을 높이세요.
-- 절대 요약하지 말고, 최대한 길고 상세하게 작성하세요.
+═══════════════════════════════════════
+📋 절대 규칙 (반드시 지켜야 합니다):
+═══════════════════════════════════════
+1. 분량: 반드시 10000자(한글 기준) 이상 작성. 짧으면 불합격입니다.
+2. 호칭: 반드시 "${customerName}님"으로만 호칭. "의뢰자님" 절대 금지.
+3. 구조: [소제목1] → 상세 설명 3~5문단 → [소제목2] → 상세 설명 3~5문단 → ... 최소 6개 이상의 소제목 필수.
+4. 소제목 형식: 반드시 대괄호 [제목] 형식으로 작성 (## 마크다운 사용 금지).
+5. 각 소제목 아래 최소 500자 이상의 본문을 작성하세요.
+6. 절대 요약하지 마세요. 원리 → 사례 → 비유 → 실천방안 → 주의사항 순서로 풍부하게 서술하세요.
+═══════════════════════════════════════
 
 ${sajuData}
 
-챕터 주제 및 작성 가이드:
+챕터: "${chDef.title}"
+작성 가이드:
 ${chDef.guide}
 
-반드시 챕터 본문 텍스트만 출력하세요. JSON 형식이 아닙니다. 제목은 포함하지 마세요.`;
+⚠️ 다시 한번 강조: 10000자 이상 필수! 짧은 답변은 절대 불가!
+반드시 챕터 본문 텍스트만 출력하세요. JSON 형식이 아닙니다. 챕터 제목은 포함하지 마세요.`;
 
     try {
       console.log(`[AI] 챕터 ${chDef.number} "${chDef.title}" 생성 중...`);
@@ -103,14 +110,63 @@ ${chDef.guide}
         max_tokens: 16000,
       });
 
-      const content = chResp.choices[0]?.message?.content || '';
-      const elapsed = Date.now() - startTime;
+      let content = chResp.choices[0]?.message?.content || '';
       const usage = chResp.usage;
-
       totalInputTokens += usage?.prompt_tokens || 0;
       totalOutputTokens += usage?.completion_tokens || 0;
 
-      console.log(`[AI] 챕터 ${chDef.number} 완료 (${elapsed}ms, ${content.length}자, 출력 ${usage?.completion_tokens} tokens)`);
+      console.log(`[AI] 챕터 ${chDef.number} 1차 완료 (${content.length}자, ${usage?.completion_tokens} tokens)`);
+
+      // 연속 호출: 글자 수가 부족하면 이어서 작성 요청 (최대 2회)
+      let attempts = 0;
+      while (content.length < MIN_CHARS && attempts < 2) {
+        attempts++;
+        console.log(`[AI] 챕터 ${chDef.number} 연속 호출 ${attempts}회 (현재 ${content.length}자 < ${MIN_CHARS}자)`);
+
+        const continuePrompt = `이전에 작성한 "${chDef.title}" 챕터의 내용이 아직 부족합니다. 아래 내용에 이어서 추가 내용을 작성하세요.
+
+═══════════════════════════════════════
+📋 절대 규칙:
+═══════════════════════════════════════
+1. 이전 내용을 반복하지 마세요. 새로운 소제목과 새로운 관점으로 이어서 작성하세요.
+2. "${customerName}님"으로만 호칭하세요.
+3. 새로운 [소제목]을 4개 이상 추가하고, 각 소제목 아래 500자 이상 작성하세요.
+4. 추가로 5000자 이상 작성하세요.
+═══════════════════════════════════════
+
+${sajuData}
+
+이전까지 작성된 내용 (마지막 500자):
+...${content.slice(-500)}
+
+위 내용에 이어서 "${chDef.title}" 챕터의 나머지를 작성하세요. 새로운 내용만 출력하세요.`;
+
+        try {
+          const contResp = await client.chat.completions.create({
+            model: 'gpt-4.1',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: continuePrompt },
+            ],
+            temperature: 0.75,
+            max_tokens: 16000,
+          });
+
+          const addedContent = contResp.choices[0]?.message?.content || '';
+          const contUsage = contResp.usage;
+          totalInputTokens += contUsage?.prompt_tokens || 0;
+          totalOutputTokens += contUsage?.completion_tokens || 0;
+
+          content += '\n\n' + addedContent;
+          console.log(`[AI] 챕터 ${chDef.number} 연속 ${attempts}회 완료 (+${addedContent.length}자, 총 ${content.length}자)`);
+        } catch (contErr) {
+          console.error(`[AI] 챕터 ${chDef.number} 연속 호출 실패:`, contErr);
+          break;
+        }
+      }
+
+      const elapsed = Date.now() - startTime;
+      console.log(`[AI] 챕터 ${chDef.number} 최종 완료 (${elapsed}ms, ${content.length}자)`);
 
       chapters.push({
         number: chDef.number,

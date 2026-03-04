@@ -585,9 +585,9 @@ function renderNarrativeChapterLarge(
   const { width } = doc.page;
   const margin = 55;
   const contentWidth = width - margin * 2;
-  const fontSize = 11.5;    // sajulab.kr 스타일 - 빽빽한 텍스트
-  const lineGap = 14;       // sajulab.kr 스타일 - 줄간격 최소화
-  const pageBottom = 760;   // 페이지 하단까지 꽉 채우기
+  const fontSize = 11.5;    // sajulab.kr 스타일
+  const lineGap = 17;       // 가독성 + 페이지 수 확보 (14→17)
+  const pageBottom = 750;   // 하단 여백 약간 여유
 
   // 상단 헤더 바
   doc.rect(0, 35, width, 2).fill('#d4af37');
