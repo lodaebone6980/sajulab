@@ -35,6 +35,7 @@ async function generateChapterByChapter(
   sajuData: string,
   customerName: string,
   productCode: string,
+  onProgress?: (chapterNum: number, totalChapters: number, phase: string) => void,
 ): Promise<NarrativeResult | null> {
   const client = getOpenAIClient();
   const year = new Date().getFullYear();
@@ -62,6 +63,7 @@ async function generateChapterByChapter(
     });
     greeting = greetingResp.choices[0]?.message?.content || '';
     console.log(`[AI] 인사말 생성 완료 (${greeting.length}자)`);
+    onProgress?.(0, chapterDefs.length, 'greeting_done');
   } catch (e) {
     console.error('[AI] 인사말 생성 실패:', e);
     greeting = `${customerName}님, 안녕하세요. 이 분석서가 삶의 좋은 나침반이 되기를 바랍니다.`;
@@ -173,6 +175,7 @@ ${sajuData}
         title: chDef.title,
         content,
       });
+      onProgress?.(chapters.length, chapterDefs.length, 'chapter_done');
     } catch (err) {
       console.error(`[AI] 챕터 ${chDef.number} 생성 실패:`, err);
       chapters.push({
@@ -180,6 +183,7 @@ ${sajuData}
         title: chDef.title,
         content: `${chDef.title}에 대한 분석 내용이 생성되지 않았습니다.`,
       });
+      onProgress?.(chapters.length, chapterDefs.length, 'chapter_done');
     }
   }
 
@@ -201,6 +205,7 @@ export async function generateNarrative(
   result: SajuResult,
   customerName: string,
   productCode: string,
+  onProgress?: (chapterNum: number, totalChapters: number, phase: string) => void,
 ): Promise<NarrativeResult | null> {
   // OpenAI 키가 없으면 null 반환 (기존 템플릿 방식으로 fallback)
   if (!isOpenAIConfigured()) {
@@ -220,7 +225,7 @@ export async function generateNarrative(
     try {
       console.log(`[AI] GPT-4.1로 ${productCode} 챕터별 내러티브 생성 시작...`);
       const startTime = Date.now();
-      const narrativeResult = await generateChapterByChapter(sajuData, customerName, productCode);
+      const narrativeResult = await generateChapterByChapter(sajuData, customerName, productCode, onProgress);
       const elapsed = Date.now() - startTime;
       console.log(`[AI] 전체 내러티브 생성 완료 (${elapsed}ms, ${narrativeResult?.chapters.length}개 챕터)`);
       return narrativeResult;

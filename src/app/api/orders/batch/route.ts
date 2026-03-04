@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getOrderById, updateOrderStatus, updateOrderResult, saveFortuneData, saveNarrative, getDb } from '@/lib/db/index';
+import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, saveFortuneData, saveNarrative, getDb } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
 import { generateSajuPdf } from '@/lib/pdf/generator';
@@ -43,13 +43,16 @@ async function processOneOrder(orderId: number, userId: number) {
     minute = parseInt(birthTime.slice(2, 4));
   }
 
+  updateOrderStatus(orderId, userId, 'analyzing');
+  updateOrderProgress(orderId, userId, 5, '사주 데이터 분석 시작');
+
   const sajuResult = await analyzeSajuWithFortune({
     year, month, day, hour, minute,
     gender: order.customer_gender as 'male' | 'female',
     isLunar: order.customer_calendar_type === 'lunar' || order.customer_calendar_type === 'leap',
   });
 
-  updateOrderStatus(orderId, userId, 'analyzing');
+  updateOrderProgress(orderId, userId, 15, '사주 데이터 분석 완료');
 
   const resultJson = JSON.stringify(sajuResult);
   updateOrderResult(orderId, userId, resultJson);
@@ -76,9 +79,19 @@ async function processOneOrder(orderId: number, userId: number) {
 
   // PDF 생성 (saju-data 상품 제외)
   if (order.product_code !== 'saju-data') {
-    updateOrderStatus(orderId, userId, 'pdf_generating');
+    updateOrderProgress(orderId, userId, 18, '내러티브 생성 준비');
 
-    let narrative = await generateNarrative(sajuResult, order.customer_name, order.product_code);
+    // 챕터별 진행률 콜백
+    const onNarrativeProgress = (chapterNum: number, totalChapters: number, phase: string) => {
+      if (phase === 'greeting_done') {
+        updateOrderProgress(orderId, userId, 20, '인사말 생성 완료');
+      } else if (phase === 'chapter_done') {
+        const chapterProgress = Math.round(20 + (chapterNum / totalChapters) * 68);
+        updateOrderProgress(orderId, userId, chapterProgress, `${chapterNum}/${totalChapters} 챕터 생성 완료`);
+      }
+    };
+
+    let narrative = await generateNarrative(sajuResult, order.customer_name, order.product_code, onNarrativeProgress);
     if (!narrative) {
       narrative = generateFallbackNarrative(sajuResult, order.customer_name, order.product_code);
     }
@@ -97,6 +110,9 @@ async function processOneOrder(orderId: number, userId: number) {
       }
     }
 
+    updateOrderStatus(orderId, userId, 'pdf_generating');
+    updateOrderProgress(orderId, userId, 90, 'PDF 파일 생성중');
+
     const pdfBuffer = await generateSajuPdf(sajuResult, {
       customerName: order.customer_name,
       productName: order.product_name,
@@ -113,6 +129,8 @@ async function processOneOrder(orderId: number, userId: number) {
     const db = getDb();
     db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
       .run(`/api/orders/${orderId}/pdf`, orderId, userId);
+
+    updateOrderProgress(orderId, userId, 98, 'PDF 저장 완료');
   }
 
   updateOrderStatus(orderId, userId, 'completed');

@@ -24,6 +24,8 @@ interface Order {
   created_at: string;
   updated_at: string;
   completed_at: string;
+  progress?: number;
+  progress_message?: string;
   phone?: string;
   email?: string;
 }
@@ -133,8 +135,8 @@ export default function OrdersPage() {
     { value: '2130', label: '해시 (21:30~23:29)' },
   ];
 
-  const fetchOrders = useCallback(async () => {
-    setIsLoading(true);
+  const fetchOrders = useCallback(async (showLoading = true) => {
+    if (showLoading) setIsLoading(true);
     try {
       const params = new URLSearchParams();
       if (period !== 'all') params.set('period', period);
@@ -153,7 +155,7 @@ export default function OrdersPage() {
     } catch (err) {
       console.error('Failed to fetch orders:', err);
     } finally {
-      setIsLoading(false);
+      if (showLoading) setIsLoading(false);
     }
   }, [period, fromDate, toDate, search, statusFilter, productFilter]);
 
@@ -172,6 +174,19 @@ export default function OrdersPage() {
   useEffect(() => { fetchProducts(); }, []);
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
 
+  // 진행 중인 주문이 있으면 3초마다 자동 polling (로딩 표시 없이)
+  useEffect(() => {
+    const activeStatuses = ['requested', 'extracting', 'analyzing', 'pdf_generating', 'processing'];
+    const hasActiveOrders = orders.some(o => activeStatuses.includes(o.status));
+    if (!hasActiveOrders) return;
+
+    const interval = setInterval(() => {
+      fetchOrders(false);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [orders, fetchOrders]);
+
   const resetFilters = () => {
     setPeriod('all');
     setFromDate('');
@@ -181,7 +196,7 @@ export default function OrdersPage() {
     setProductFilter('');
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, progress?: number, progressMessage?: string) => {
     const styles: Record<string, string> = {
       pending: 'bg-gray-100 text-gray-600',
       requested: 'bg-blue-100 text-blue-600',
@@ -202,6 +217,32 @@ export default function OrdersPage() {
       completed: '완료',
       failed: '실패',
     };
+
+    // 진행 중인 상태일 때 프로그레스 바 표시
+    const isActive = ['requested', 'extracting', 'analyzing', 'pdf_generating', 'processing'].includes(status);
+    if (isActive && progress !== undefined && progress > 0) {
+      const barColor = status === 'pdf_generating' ? 'bg-purple-500' : 'bg-blue-500';
+      return (
+        <div className="min-w-[120px]">
+          <div className="flex items-center justify-between mb-1">
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${styles[status] || styles.pending}`}>
+              {labels[status] || status}
+            </span>
+            <span className="text-[11px] font-semibold text-gray-600">{progress}%</span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full ${barColor} rounded-full`}
+              style={{ width: `${Math.min(progress, 100)}%`, transition: 'width 0.5s ease' }}
+            />
+          </div>
+          {progressMessage && (
+            <p className="text-[10px] text-gray-400 mt-0.5 truncate">{progressMessage}</p>
+          )}
+        </div>
+      );
+    }
+
     return (
       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${styles[status] || styles.pending}`}>
         {labels[status] || status}
@@ -453,15 +494,8 @@ export default function OrdersPage() {
       });
       if (res.ok) {
         setSelectedIds(new Set());
-        // 1초 후 새로고침 (상태 반영)
+        // 1초 후 새로고침 (상태 반영) - 이후 auto-polling이 3초마다 진행 감시
         setTimeout(() => fetchOrders(), 1000);
-        // 5초마다 자동 새로고침 (완료 감지)
-        const interval = setInterval(() => {
-          fetchOrders().then(() => {
-            // 모든 주문이 완료/실패이면 새로고침 중단
-          });
-        }, 5000);
-        setTimeout(() => clearInterval(interval), 120000); // 최대 2분
       }
     } catch (err) {
       console.error('Batch process failed:', err);
@@ -657,7 +691,7 @@ export default function OrdersPage() {
                         <td className="px-4 py-3 text-sm text-gray-400">{idx + 1}</td>
                         <td className="px-4 py-3 text-sm text-gray-900 font-medium">{order.customer_name}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{order.product_name || order.product_code}</td>
-                        <td className="px-4 py-3">{getStatusBadge(order.status)}</td>
+                        <td className="px-4 py-3">{getStatusBadge(order.status, order.progress, order.progress_message)}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{formatBirthDate(order.customer_birth_date)}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {order.customer_calendar_type === 'lunar' ? '음력' : order.customer_calendar_type === 'leap' ? '윤달' : '양력'}

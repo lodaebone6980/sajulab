@@ -82,6 +82,8 @@ function initializeDb(db: Database.Database) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       completed_at DATETIME,
+      progress INTEGER DEFAULT 0,
+      progress_message TEXT DEFAULT '',
       FOREIGN KEY (user_id) REFERENCES users(id),
       FOREIGN KEY (customer_id) REFERENCES customers(id),
       FOREIGN KEY (product_id) REFERENCES products(id)
@@ -215,6 +217,14 @@ function initializeDb(db: Database.Database) {
   // Migration: cover_image column 추가
   try {
     db.exec(`ALTER TABLE products ADD COLUMN cover_image TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+
+  // Migration: progress tracking columns 추가
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN progress INTEGER DEFAULT 0`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN progress_message TEXT DEFAULT ''`);
   } catch { /* already exists */ }
 
   // Auto-seed admin user if no users exist
@@ -414,10 +424,25 @@ export function getOrderById(id: number, userId: number) {
 
 export function updateOrderStatus(id: number, userId: number, status: string) {
   const db = getDb();
-  const completedAt = status === 'completed' ? "datetime('now')" : 'NULL';
+  // 상태 변경 시 진행률도 자동 설정
+  let progress = 0;
+  let progressMessage = '';
+  if (status === 'completed') { progress = 100; progressMessage = '완료'; }
+  else if (status === 'failed') { progress = 0; progressMessage = '실패'; }
+  else if (status === 'requested') { progress = 2; progressMessage = '요청됨'; }
+  else if (status === 'analyzing') { progress = 5; progressMessage = '사주 분석 시작'; }
+  else if (status === 'pdf_generating') { progress = 90; progressMessage = 'PDF 생성중'; }
+
   db.prepare(
-    `UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP, completed_at = ${status === 'completed' ? "datetime('now')" : 'completed_at'} WHERE id = ? AND user_id = ?`
-  ).run(status, id, userId);
+    `UPDATE orders SET status = ?, progress = ?, progress_message = ?, updated_at = CURRENT_TIMESTAMP, completed_at = ${status === 'completed' ? "datetime('now')" : 'completed_at'} WHERE id = ? AND user_id = ?`
+  ).run(status, progress, progressMessage, id, userId);
+}
+
+export function updateOrderProgress(id: number, userId: number, progress: number, message: string) {
+  const db = getDb();
+  db.prepare(
+    'UPDATE orders SET progress = ?, progress_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
+  ).run(progress, message, id, userId);
 }
 
 export function updateOrderResult(id: number, userId: number, resultJson: string) {
