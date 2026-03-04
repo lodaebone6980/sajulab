@@ -413,9 +413,10 @@ function renderNarrativeChapter(
   // 구분선
   doc.moveTo(margin, 135).lineTo(width - margin, 135).strokeColor('#e5e7eb').lineWidth(1).stroke();
 
-  // 본문 텍스트 - 긴 텍스트를 여러 페이지에 걸쳐 렌더링
+  // 본문 텍스트 - 긴 텍스트를 여러 페이지에 걸쳐 렌더링 (리터럴 \n 치환)
   let y = 155;
-  const paragraphs = chapter.content.split('\n').filter(p => p.trim());
+  const cleanContent = chapter.content.replace(/\\n/g, '\n').replace(/\\t/g, ' ').replace(/\\r/g, '');
+  const paragraphs = cleanContent.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
@@ -535,9 +536,10 @@ function renderGreetingPageLarge(
   // 장식선
   doc.rect(width / 2 - 25, 100, 50, 2).fill('#d4af37');
 
-  // 인사말 본문
+  // 인사말 본문 (리터럴 \n 치환)
   let y = 130;
-  const paragraphs = greeting.split('\n').filter(p => p.trim());
+  const cleanGreeting = greeting.replace(/\\n/g, '\n').replace(/\\t/g, ' ').replace(/\\r/g, '');
+  const paragraphs = cleanGreeting.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
@@ -616,7 +618,12 @@ function renderNarrativeChapterLarge(
 
   let y = 130;
 
-  const paragraphs = chapter.content.split('\n');
+  // 리터럴 \n 문자열을 실제 줄바꿈으로 치환
+  const cleanContent = chapter.content
+    .replace(/\\n/g, '\n')        // 리터럴 \n → 실제 줄바꿈
+    .replace(/\\t/g, ' ')         // 리터럴 \t → 공백
+    .replace(/\\r/g, '');         // 리터럴 \r 제거
+  const paragraphs = cleanContent.split('\n');
 
   for (const para of paragraphs) {
     const trimmed = para.trim();
