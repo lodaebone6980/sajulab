@@ -10,6 +10,9 @@ import {
   getBasicAnalysisPrompt,
   getPremiumAnalysisPrompt,
   getNewYearAnalysisPrompt,
+  getPremiumChapterDefinitions,
+  getNewYearChapterDefinitions,
+  type ChapterDefinition,
 } from './prompts';
 import type { SajuResult } from '@/lib/saju/types';
 
@@ -24,6 +27,116 @@ export interface NarrativeResult {
   chapters: NarrativeChapter[];
   model: string;
   tokenUsage?: { input: number; output: number; total: number };
+}
+
+// ─── Chapter-by-chapter generation for Premium and NewYear ───
+
+async function generateChapterByChapter(
+  sajuData: string,
+  customerName: string,
+  productCode: string,
+): Promise<NarrativeResult | null> {
+  const client = getOpenAIClient();
+  const year = new Date().getFullYear();
+
+  // Get chapter definitions based on product
+  const chapterDefs = productCode === 'saju-newyear'
+    ? getNewYearChapterDefinitions(customerName, year)
+    : getPremiumChapterDefinitions(customerName);
+
+  // 1. Generate greeting first
+  const greetingPrompt = productCode === 'saju-newyear'
+    ? `다음 사주 데이터를 기반으로 ${year}년 신년운세 분석서의 인사말을 작성하세요.\n반드시 "${customerName}님"으로 호칭하세요.\n사주의 특성과 새해 전망을 포함한 따뜻하고 정성스러운 인사말을 800~1200자로 작성하세요.\n\n${sajuData}\n\n반드시 인사말 텍스트만 출력하세요. JSON 형식이 아닙니다.`
+    : `다음 사주 데이터를 기반으로 프리미엄 사주 분석서의 인사말을 작성하세요.\n반드시 "${customerName}님"으로 호칭하세요.\n사주의 특성과 운명의 흐름을 포함한 따뜻하고 정성스러운 인사말을 800~1200자로 작성하세요.\n\n${sajuData}\n\n반드시 인사말 텍스트만 출력하세요. JSON 형식이 아닙니다.`;
+
+  let greeting = '';
+  try {
+    const greetingResp = await client.chat.completions.create({
+      model: 'gpt-4.1',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: greetingPrompt },
+      ],
+      temperature: 0.75,
+      max_tokens: 2000,
+    });
+    greeting = greetingResp.choices[0]?.message?.content || '';
+    console.log(`[AI] 인사말 생성 완료 (${greeting.length}자)`);
+  } catch (e) {
+    console.error('[AI] 인사말 생성 실패:', e);
+    greeting = `${customerName}님, 안녕하세요. 이 분석서가 삶의 좋은 나침반이 되기를 바랍니다.`;
+  }
+
+  // 2. Generate each chapter separately
+  const chapters: NarrativeChapter[] = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+
+  for (const chDef of chapterDefs) {
+    const chapterPrompt = `다음 사주 데이터를 기반으로 "${chDef.title}" 챕터의 내용을 작성하세요.
+
+⚠️ 매우 중요:
+- 반드시 최소 8000자 이상을 작성하세요. 짧은 답변은 절대 허용되지 않습니다.
+- 고객을 반드시 "${customerName}님"으로 호칭하세요. "의뢰자님"이라는 호칭은 절대 사용하지 마세요.
+- 내용을 풍부하고 구체적으로 작성하세요: 원리 설명, 구체적 사례, 비유와 예시, 실천 방안, 주의사항을 모두 포함하세요.
+- 적절한 소제목(##)과 단락 구분을 사용하여 가독성을 높이세요.
+- 절대 요약하지 말고, 최대한 길고 상세하게 작성하세요.
+
+${sajuData}
+
+챕터 주제 및 작성 가이드:
+${chDef.guide}
+
+반드시 챕터 본문 텍스트만 출력하세요. JSON 형식이 아닙니다. 제목은 포함하지 마세요.`;
+
+    try {
+      console.log(`[AI] 챕터 ${chDef.number} "${chDef.title}" 생성 중...`);
+      const startTime = Date.now();
+
+      const chResp = await client.chat.completions.create({
+        model: 'gpt-4.1',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: chapterPrompt },
+        ],
+        temperature: 0.75,
+        max_tokens: 16000,
+      });
+
+      const content = chResp.choices[0]?.message?.content || '';
+      const elapsed = Date.now() - startTime;
+      const usage = chResp.usage;
+
+      totalInputTokens += usage?.prompt_tokens || 0;
+      totalOutputTokens += usage?.completion_tokens || 0;
+
+      console.log(`[AI] 챕터 ${chDef.number} 완료 (${elapsed}ms, ${content.length}자, 출력 ${usage?.completion_tokens} tokens)`);
+
+      chapters.push({
+        number: chDef.number,
+        title: chDef.title,
+        content,
+      });
+    } catch (err) {
+      console.error(`[AI] 챕터 ${chDef.number} 생성 실패:`, err);
+      chapters.push({
+        number: chDef.number,
+        title: chDef.title,
+        content: `${chDef.title}에 대한 분석 내용이 생성되지 않았습니다.`,
+      });
+    }
+  }
+
+  return {
+    greeting,
+    chapters,
+    model: 'gpt-4.1',
+    tokenUsage: {
+      input: totalInputTokens,
+      output: totalOutputTokens,
+      total: totalInputTokens + totalOutputTokens,
+    },
+  };
 }
 
 // ─── 상품별 내러티브 생성 ───
@@ -45,22 +158,24 @@ export async function generateNarrative(
   }
 
   const sajuData = formatSajuDataForLLM(result, customerName);
-  let userPrompt: string;
 
-  switch (productCode) {
-    case 'saju-basic':
-      userPrompt = getBasicAnalysisPrompt(sajuData, customerName);
-      break;
-    case 'saju-premium':
-      userPrompt = getPremiumAnalysisPrompt(sajuData, customerName);
-      break;
-    case 'saju-newyear':
-      userPrompt = getNewYearAnalysisPrompt(sajuData, customerName, new Date().getFullYear());
-      break;
-    default:
-      userPrompt = getBasicAnalysisPrompt(sajuData, customerName);
-      break;
+  // Premium and NewYear: chapter-by-chapter generation for 100+ pages
+  if (productCode === 'saju-premium' || productCode === 'saju-newyear') {
+    try {
+      console.log(`[AI] GPT-4.1로 ${productCode} 챕터별 내러티브 생성 시작...`);
+      const startTime = Date.now();
+      const narrativeResult = await generateChapterByChapter(sajuData, customerName, productCode);
+      const elapsed = Date.now() - startTime;
+      console.log(`[AI] 전체 내러티브 생성 완료 (${elapsed}ms, ${narrativeResult?.chapters.length}개 챕터)`);
+      return narrativeResult;
+    } catch (error) {
+      console.error('[AI] 챕터별 내러티브 생성 오류:', error);
+      return null;
+    }
   }
+
+  // Basic: single call
+  const userPrompt = getBasicAnalysisPrompt(sajuData, customerName);
 
   try {
     console.log(`[AI] GPT-4.1로 ${productCode} 내러티브 생성 시작...`);
@@ -74,7 +189,7 @@ export async function generateNarrative(
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.75,
-      max_tokens: productCode === 'saju-basic' ? 8000 : 32000,
+      max_tokens: 8000,
       response_format: { type: 'json_object' },
     });
 
