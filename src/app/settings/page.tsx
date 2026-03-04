@@ -26,6 +26,13 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Google Drive state
+  const [driveConfigured, setDriveConfigured] = useState(false);
+  const [driveEmail, setDriveEmail] = useState('');
+  const [driveFolderId, setDriveFolderId] = useState('');
+  const [driveTesting, setDriveTesting] = useState(false);
+  const [driveTestResult, setDriveTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Fetch user data
   useEffect(() => {
     const fetchUser = async () => {
@@ -55,6 +62,20 @@ export default function SettingsPage() {
     };
 
     fetchUser();
+
+    // Google Drive 설정 상태 가져오기
+    const fetchDriveStatus = async () => {
+      try {
+        const res = await fetch('/api/settings/drive-test');
+        if (res.ok) {
+          const data = await res.json();
+          setDriveConfigured(data.configured);
+          setDriveEmail(data.serviceAccountEmail || '');
+          setDriveFolderId(data.folderId || '');
+        }
+      } catch { /* ignore */ }
+    };
+    fetchDriveStatus();
   }, []);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -145,6 +166,24 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDriveTest = async () => {
+    setDriveTesting(true);
+    setDriveTestResult(null);
+    try {
+      const res = await fetch('/api/settings/drive-test', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        setDriveTestResult({ success: true, message: data.message });
+      } else {
+        setDriveTestResult({ success: false, message: data.error });
+      }
+    } catch (err: any) {
+      setDriveTestResult({ success: false, message: '연결 테스트 중 오류가 발생했습니다.' });
+    } finally {
+      setDriveTesting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -220,6 +259,57 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
+        </div>
+
+        {/* Google Drive Integration Section */}
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-bold text-gray-900">Google Drive 연동</h2>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${driveConfigured ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              {driveConfigured ? '연결됨' : '미연결'}
+            </span>
+          </div>
+
+          {driveConfigured ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">서비스 계정 이메일</label>
+                <p className="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg break-all">{driveEmail}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">대상 폴더 ID</label>
+                <p className="text-sm text-gray-600 bg-gray-50 px-4 py-2 rounded-lg">
+                  {driveFolderId || '(기본 - 내 드라이브 루트)'}
+                </p>
+              </div>
+
+              {driveTestResult && (
+                <div className={`p-3 rounded-lg text-sm ${driveTestResult.success ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  {driveTestResult.message}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleDriveTest}
+                  disabled={driveTesting}
+                  className="px-5 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors text-sm"
+                >
+                  {driveTesting ? '테스트 중...' : '연동 테스트'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm text-gray-500 space-y-3">
+              <p>Google Drive 연동을 위해 Railway 환경변수에 다음 값을 설정해주세요:</p>
+              <div className="bg-gray-50 p-4 rounded-lg font-mono text-xs space-y-1">
+                <p>GOOGLE_SERVICE_ACCOUNT_EMAIL=서비스계정@프로젝트.iam.gserviceaccount.com</p>
+                <p>GOOGLE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...키내용...\n-----END PRIVATE KEY-----</p>
+                <p>GOOGLE_DRIVE_FOLDER_ID=폴더ID (선택사항)</p>
+              </div>
+              <p className="text-xs text-gray-400">설정 후 서버를 재시작하면 자동으로 연동됩니다.</p>
+            </div>
+          )}
         </div>
 
         {/* Password Change Section */}

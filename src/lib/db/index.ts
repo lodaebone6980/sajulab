@@ -227,6 +227,14 @@ function initializeDb(db: Database.Database) {
     db.exec(`ALTER TABLE orders ADD COLUMN progress_message TEXT DEFAULT ''`);
   } catch { /* already exists */ }
 
+  // Migration: Google Drive 연동 컬럼 추가
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN google_drive_file_id TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN google_drive_url TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+
   // Auto-seed admin user if no users exist
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
   if (userCount.count === 0) {
@@ -443,6 +451,13 @@ export function updateOrderProgress(id: number, userId: number, progress: number
   db.prepare(
     'UPDATE orders SET progress = ?, progress_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
   ).run(progress, message, id, userId);
+}
+
+export function updateOrderDriveInfo(id: number, userId: number, fileId: string, url: string) {
+  const db = getDb();
+  db.prepare(
+    'UPDATE orders SET google_drive_file_id = ?, google_drive_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?'
+  ).run(fileId, url, id, userId);
 }
 
 export function updateOrderResult(id: number, userId: number, resultJson: string) {

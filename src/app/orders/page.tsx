@@ -26,6 +26,7 @@ interface Order {
   completed_at: string;
   progress?: number;
   progress_message?: string;
+  google_drive_url?: string;
   phone?: string;
   email?: string;
 }
@@ -717,6 +718,18 @@ export default function OrdersPage() {
                                 title="분석지 PDF"
                               >
                                 분석지
+                              </a>
+                            )}
+                            {/* Google Drive 링크 */}
+                            {order.status === 'completed' && order.google_drive_url && (
+                              <a
+                                href={order.google_drive_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded transition-colors"
+                                title="Google Drive에서 보기"
+                              >
+                                Drive
                               </a>
                             )}
                             {/* 데이터 - for completed orders */}

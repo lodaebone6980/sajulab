@@ -8,8 +8,10 @@ import {
   getProducts,
   updateOrderStatus,
   updateOrderResult,
+  updateOrderDriveInfo,
   getDb,
 } from '@/lib/db/index';
+import { uploadPdfToDrive, isDriveConfigured } from '@/lib/google-drive';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
 import { generateSajuPdf } from '@/lib/pdf/generator';
@@ -285,6 +287,18 @@ export async function POST(request: NextRequest) {
         const db = getDb();
         db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
           .run(`/api/orders/${orderId}/pdf`, orderId, userId);
+
+        // Google Drive 업로드
+        if (isDriveConfigured()) {
+          try {
+            const driveFileName = `${customerName}_${product.code}_${orderId}.pdf`;
+            const driveResult = await uploadPdfToDrive(pdfBuffer, driveFileName);
+            updateOrderDriveInfo(orderId, userId, driveResult.fileId, driveResult.webViewLink);
+            console.log(`[Drive] ✅ Order ${orderId} uploaded: ${driveResult.webViewLink}`);
+          } catch (driveErr) {
+            console.error(`[Drive] ❌ Upload failed for order ${orderId}:`, driveErr);
+          }
+        }
       }
 
       // Mark as completed
