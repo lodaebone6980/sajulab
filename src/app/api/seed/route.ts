@@ -4,10 +4,12 @@ import {
   createOrder,
   getProducts,
   updateOrderStatus,
+  saveNarrative,
   findUserByEmail,
 } from '@/lib/db/index';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { generateSajuPdf } from '@/lib/pdf/generator';
+import { generateNarrative, generateFallbackNarrative } from '@/lib/ai';
 import path from 'path';
 import fs from 'fs';
 
@@ -120,11 +122,33 @@ export async function POST(request: NextRequest) {
 
           updateOrderStatus(orderId, userId, 'analyzing');
 
-          // Generate PDF
+          // Generate AI narrative (or fallback)
+          let narrative = await generateNarrative(sajuResult, customerData.name, product.code);
+          if (!narrative) {
+            narrative = generateFallbackNarrative(sajuResult, customerData.name, product.code);
+          }
+
+          // Save narrative to DB
+          if (narrative) {
+            try {
+              saveNarrative(orderId, product.code, {
+                greeting: narrative.greeting,
+                chapters: JSON.stringify(narrative.chapters),
+                model: narrative.model || 'fallback',
+                promptTokens: narrative.tokenUsage?.input || 0,
+                completionTokens: narrative.tokenUsage?.output || 0,
+              });
+            } catch (e) {
+              console.warn(`[Seed] Narrative save warning for order ${orderId}:`, e);
+            }
+          }
+
+          // Generate PDF with narrative
           const pdfBuffer = await generateSajuPdf(sajuResult, {
             customerName: customerData.name,
             productName: product.name,
             productCode: product.code,
+            narrative,
           });
 
           // Save PDF
