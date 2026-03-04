@@ -86,9 +86,11 @@ function generatePdfKitFallback(
       doc.on('end', () => resolve(Buffer.concat(chunks)));
       doc.on('error', reject);
 
-      // Pretendard 우선 → NotoSansKR 폴백 → NanumGothic 폴백
+      // Pretendard(한글/라틴) + NotoSansKR(한자 전용) 이중 폰트 전략
       let koreanFont = 'Helvetica';
       let koreanBoldFont = 'Helvetica-Bold';
+      let hanjaFont = 'Helvetica';        // 한자 전용 폰트
+      let hanjaBoldFont = 'Helvetica-Bold';
 
       const pretendardRegularExists = fs.existsSync(FONT_PRETENDARD_REGULAR);
       const pretendardBoldExists = fs.existsSync(FONT_PRETENDARD_BOLD);
@@ -115,15 +117,22 @@ function generatePdfKitFallback(
         }
       }
 
-      // 2순위: NotoSansKR (한자 지원 but 행간 넓음)
-      if (!fontRegistered && notoRegularExists && notoBoldExists) {
+      // 한자(CJK) 전용 폰트: NotoSansKR (Pretendard에 한자 글리프 없음)
+      if (notoRegularExists && notoBoldExists) {
         try {
-          doc.registerFont('Korean', FONT_REGULAR);
-          doc.registerFont('KoreanBold', FONT_BOLD);
-          koreanFont = 'Korean';
-          koreanBoldFont = 'KoreanBold';
-          fontRegistered = true;
-          console.log('[PDF] NotoSansKR 폰트 등록 (한자 지원, 행간 넓음)');
+          doc.registerFont('Hanja', FONT_REGULAR);
+          doc.registerFont('HanjaBold', FONT_BOLD);
+          hanjaFont = 'Hanja';
+          hanjaBoldFont = 'HanjaBold';
+          console.log('[PDF] NotoSansKR 한자 전용 폰트 등록 성공');
+
+          // Pretendard가 없으면 NotoSansKR을 메인 폰트로도 사용
+          if (!fontRegistered) {
+            koreanFont = 'Hanja';
+            koreanBoldFont = 'HanjaBold';
+            fontRegistered = true;
+            console.log('[PDF] NotoSansKR을 메인 폰트로 사용 (Pretendard 없음)');
+          }
         } catch (err) {
           console.warn('[PDF] NotoSansKR 등록 실패:', err);
         }
@@ -154,22 +163,22 @@ function generatePdfKitFallback(
         options.productCode !== 'saju-data';
 
       if (useAiNarrative) {
-        generateNarrativePdf(doc, result, options, koreanFont, koreanBoldFont);
+        generateNarrativePdf(doc, result, options, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
       } else {
         // sajulab.kr 동일 구조 (레퍼런스 스타일)
         switch (options.productCode) {
           case 'saju-basic':
-            generateBasicPdf(doc, result, options, koreanFont, koreanBoldFont);
+            generateBasicPdf(doc, result, options, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
             break;
           case 'saju-newyear':
-            generateNewYearPdf(doc, result, options, koreanFont, koreanBoldFont);
+            generateNewYearPdf(doc, result, options, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
             break;
           case 'saju-data':
-            generateDataPdf(doc, result, options, koreanFont, koreanBoldFont);
+            generateDataPdf(doc, result, options, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
             break;
           case 'saju-premium':
           default:
-            generatePremiumPdf(doc, result, options, koreanFont, koreanBoldFont);
+            generatePremiumPdf(doc, result, options, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
             break;
         }
       }
@@ -190,7 +199,9 @@ function generateNarrativePdf(
   result: SajuResult,
   options: PdfOptions,
   koreanFont: string,
-  koreanBoldFont: string
+  koreanBoldFont: string,
+  hanjaFont: string,
+  hanjaBoldFont: string
 ) {
   const narrative = options.narrative!;
   const isNewYear = options.productCode === 'saju-newyear';
@@ -211,11 +222,11 @@ function generateNarrativePdf(
 
   // 4. 사주원국표
   doc.addPage();
-  renderFourPillars(doc, result, koreanFont, koreanBoldFont, options);
+  renderFourPillars(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont, options);
 
   // 5. 오행분포도
   doc.addPage();
-  renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
+  renderElementDistribution(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
 
   // 6. 십신 분포 페이지
   doc.addPage();
@@ -1204,16 +1215,18 @@ function generateBasicPdf(
   result: SajuResult,
   options: PdfOptions,
   koreanFont: string,
-  koreanBoldFont: string
+  koreanBoldFont: string,
+  hanjaFont: string,
+  hanjaBoldFont: string
 ) {
   // saju-basic: Cover + Four Pillars + Element Distribution + TenGodDistribution + Brief fortune (personality only) + Outro
   renderCoverPage(doc, result, options, koreanFont, koreanBoldFont);
 
   doc.addPage();
-  renderFourPillars(doc, result, koreanFont, koreanBoldFont, options);
+  renderFourPillars(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont, options);
 
   doc.addPage();
-  renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
+  renderElementDistribution(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
 
   doc.addPage();
   renderTenGodDistribution(doc, result, koreanFont, koreanBoldFont);
@@ -1230,16 +1243,18 @@ function generateNewYearPdf(
   result: SajuResult,
   options: PdfOptions,
   koreanFont: string,
-  koreanBoldFont: string
+  koreanBoldFont: string,
+  hanjaFont: string,
+  hanjaBoldFont: string
 ) {
   // saju-newyear: Cover + Four Pillars + Element Distribution + TenGodDistribution + Year Fortune + Month Fortune + Outro
   renderCoverPage(doc, result, options, koreanFont, koreanBoldFont);
 
   doc.addPage();
-  renderFourPillars(doc, result, koreanFont, koreanBoldFont, options);
+  renderFourPillars(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont, options);
 
   doc.addPage();
-  renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
+  renderElementDistribution(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
 
   doc.addPage();
   renderTenGodDistribution(doc, result, koreanFont, koreanBoldFont);
@@ -1263,7 +1278,9 @@ function generateDataPdf(
   result: SajuResult,
   options: PdfOptions,
   koreanFont: string,
-  koreanBoldFont: string
+  koreanBoldFont: string,
+  hanjaFont: string,
+  hanjaBoldFont: string
 ) {
   // saju-data: Cover + All raw data as text + Outro
   renderCoverPage(doc, result, options, koreanFont, koreanBoldFont);
@@ -1280,7 +1297,9 @@ function generatePremiumPdf(
   result: SajuResult,
   options: PdfOptions,
   koreanFont: string,
-  koreanBoldFont: string
+  koreanBoldFont: string,
+  hanjaFont: string,
+  hanjaBoldFont: string
 ) {
   // saju-premium: Full current PDF (all sections)
   renderCoverPage(doc, result, options, koreanFont, koreanBoldFont);
@@ -1289,10 +1308,10 @@ function generatePremiumPdf(
   renderTableOfContents(doc, result, options, koreanFont, koreanBoldFont);
 
   doc.addPage();
-  renderFourPillars(doc, result, koreanFont, koreanBoldFont, options);
+  renderFourPillars(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont, options);
 
   doc.addPage();
-  renderElementDistribution(doc, result, koreanFont, koreanBoldFont);
+  renderElementDistribution(doc, result, koreanFont, koreanBoldFont, hanjaFont, hanjaBoldFont);
 
   doc.addPage();
   renderTenGodDistribution(doc, result, koreanFont, koreanBoldFont);
@@ -1300,10 +1319,10 @@ function generatePremiumPdf(
   renderFortuneAnalysis(doc, result, koreanFont, koreanBoldFont);
 
   doc.addPage();
-  renderDaeUn(doc, result, koreanFont, koreanBoldFont);
+  renderDaeUn(doc, result, koreanFont, koreanBoldFont, hanjaBoldFont);
 
   doc.addPage();
-  renderExtendedAnalysis(doc, result, koreanFont, koreanBoldFont);
+  renderExtendedAnalysis(doc, result, koreanFont, koreanBoldFont, hanjaBoldFont);
 
   if (result.yearFortune || result.monthFortunes) {
     doc.addPage();
@@ -1433,7 +1452,7 @@ function getCenteredTextY(cellY: number, cellHeight: number, fontSize: number): 
 // ─────────────────────────────────────────────
 //  FOUR PILLARS (사주원국표)
 // ─────────────────────────────────────────────
-function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string, options: PdfOptions) {
+function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string, hanjaFont: string, hanjaBoldFont: string, options: PdfOptions) {
   const { width, height } = doc.page;
   const { fourPillars, tenGods, birthInfo } = result;
   const margin = 40;
@@ -1517,10 +1536,10 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const stemColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한자 크게 (셀 중앙 위쪽)
+    // 한자 크게 (셀 중앙 위쪽) - NotoSansKR(한자 전용) 사용
     const hanjaFontSize = 30;
     const hanjaY = ty + 12;
-    doc.font(koreanBoldFont).fontSize(hanjaFontSize).fillColor(stemColor);
+    doc.font(hanjaBoldFont).fontSize(hanjaFontSize).fillColor(stemColor);
     doc.text(p.heavenlyStem, cellX, hanjaY, { width: colW, align: 'center', lineBreak: false });
 
     // 한글 읽기 (한자 아래에 명확히 분리)
@@ -1560,10 +1579,10 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     const branchColor = ELEMENT_COLORS[p.elementKo] || '#374151';
     const cellX = tableX + labelColW + i * colW;
 
-    // 한자 크게 (셀 중앙 위쪽)
+    // 한자 크게 (셀 중앙 위쪽) - NotoSansKR(한자 전용) 사용
     const hanjaFontSize = 30;
     const hanjaY = ty + 12;
-    doc.font(koreanBoldFont).fontSize(hanjaFontSize).fillColor(branchColor);
+    doc.font(hanjaBoldFont).fontSize(hanjaFontSize).fillColor(branchColor);
     doc.text(p.earthlyBranch, cellX, hanjaY, { width: colW, align: 'center', lineBreak: false });
 
     // 한글 읽기 (한자 아래에 명확히 분리)
@@ -1613,7 +1632,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
       if (hidden.中) hiddenText += (hiddenText ? ',' : '') + hidden.中;
       if (hidden.正) hiddenText += (hiddenText ? ',' : '') + hidden.正;
 
-      doc.font(koreanFont).fontSize(9).fillColor('#374151');
+      doc.font(hanjaFont).fontSize(9).fillColor('#374151');
       doc.text(hiddenText || '-', tableX + labelColW + i * colW, hiddenStemY, { width: colW, align: 'center' });
     }
     ty += hiddenStemH;
@@ -1702,7 +1721,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     doc.roundedRect(bx, ty + 12, badgeW, 48, 6).strokeColor('#d1d5db').stroke();
     doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
     doc.text(g.label, bx, ty + 16, { width: badgeW, align: 'center' });
-    doc.font(koreanBoldFont).fontSize(18).fillColor(elColor);
+    doc.font(hanjaBoldFont).fontSize(18).fillColor(elColor);
     const badgeCenterY = getCenteredTextY(ty + 12, 48, 18);
     doc.text(ELEMENT_HANJA[g.value] || g.value, bx, badgeCenterY, { width: badgeW, align: 'center' });
   }
@@ -1711,7 +1730,7 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
 // ─────────────────────────────────────────────
 //  ELEMENT DISTRIBUTION (오행분포)
 // ─────────────────────────────────────────────
-function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string) {
+function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string, hanjaFont: string, hanjaBoldFont: string) {
   const { width } = doc.page;
   const { elementDistribution, yongSin, giSin } = result;
   const margin = 50;
@@ -1793,9 +1812,9 @@ function renderElementDistribution(doc: PDFKit.PDFDocument, result: SajuResult, 
     const barW = (pct / 100) * barMaxW;
     const centerY = ey + rowH / 2;
 
-    // 한자 원형 아이콘 - getCenteredTextY로 정확한 중앙 정렬
+    // 한자 원형 아이콘 - NotoSansKR(한자 전용) 사용
     doc.circle(margin + 36, centerY, circleR).fill(el.color);
-    doc.font(koreanBoldFont).fontSize(16).fillColor('#ffffff');
+    doc.font(hanjaBoldFont).fontSize(16).fillColor('#ffffff');
     doc.text(el.hanja, margin + 36 - circleR, getCenteredTextY(centerY - circleR, circleR * 2, 16), { width: circleR * 2, align: 'center' });
 
     // 한글 레이블 - 동일한 중앙 정렬 로직
@@ -1894,7 +1913,7 @@ function renderFortuneSectionPage(doc: PDFKit.PDFDocument, icon: string, title: 
 // ─────────────────────────────────────────────
 //  DAE UN (대운)
 // ─────────────────────────────────────────────
-function renderDaeUn(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string) {
+function renderDaeUn(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string, hanjaBoldFont: string = koreanBoldFont) {
   const { width } = doc.page;
   const { daeUn } = result;
 
@@ -1929,7 +1948,7 @@ function renderDaeUn(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: st
       doc.text(`${du.age}세~`, x - 20, y + 4, { width: 40, align: 'center' });
 
       // Stem + Branch
-      doc.font(koreanBoldFont).fontSize(16).fillColor(color);
+      doc.font(hanjaBoldFont).fontSize(16).fillColor(color);
       doc.text(`${du.heavenlyStem}${du.earthlyBranch}`, x - 25, y + 42, { width: 50, align: 'center' });
 
       // Year range
@@ -1938,7 +1957,7 @@ function renderDaeUn(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: st
 
       // Element badge
       doc.roundedRect(x - 18, y + 78, 36, 16, 8).fill(color + '20');
-      doc.font(koreanBoldFont).fontSize(7).fillColor(color);
+      doc.font(hanjaBoldFont).fontSize(7).fillColor(color);
       doc.text(`${ELEMENT_HANJA[du.element]}${du.element}`, x - 18, y + 82, { width: 36, align: 'center' });
     }
 
@@ -2046,7 +2065,7 @@ function renderOutroPage(doc: PDFKit.PDFDocument, options: PdfOptions, koreanFon
 // ─────────────────────────────────────────────
 //  EXTENDED ANALYSIS (확장 분석)
 // ─────────────────────────────────────────────
-function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string) {
+function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, koreanFont: string, koreanBoldFont: string, hanjaBoldFont: string = koreanBoldFont) {
   const { width } = doc.page;
 
   drawSectionHeader(doc, '심층 분석 (深層分析)', koreanBoldFont);
@@ -2109,7 +2128,7 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
       doc.roundedRect(cx + 2, y, cellW - 4, 50, 6).fill('#f8fafc');
       doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
       doc.text(`${items[i].label}(${items[i].sub})`, cx + 2, y + 6, { width: cellW - 4, align: 'center' });
-      doc.font(koreanBoldFont).fontSize(16).fillColor(color);
+      doc.font(hanjaBoldFont).fontSize(16).fillColor(color);
       doc.text(`${ELEMENT_HANJA[items[i].value]}${items[i].value}`, cx + 2, y + 24, { width: cellW - 4, align: 'center' });
     }
     y += 68;
