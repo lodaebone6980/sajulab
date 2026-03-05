@@ -1303,7 +1303,7 @@ export default function OrdersPage() {
                           <h5 className="text-sm font-bold text-red-700">궁합 대상 정보</h5>
                           <button
                             type="button"
-                            onClick={() => { setShowLoadPerson2Modal(true); setLoadPerson2Search(''); setLoadPerson2List([]); }}
+                            onClick={() => { setShowLoadPerson2Modal(true); setLoadPerson2Search(''); fetchPerson2ForLoad(''); }}
                             className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center gap-1"
                           >
                             <UserPlus size={12} /> 기존 고객 불러오기
