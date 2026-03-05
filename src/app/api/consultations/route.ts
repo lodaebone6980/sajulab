@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, id: result.lastInsertRowid });
   } catch (error: any) {
     console.error('Create consultation error:', error);
-    return NextResponse.json({ error: `상담 기록 생성 실패: ${error?.message || String(error)}` }, { status: 500 });
+    return NextResponse.json({ error: `[v5] 상담 기록 생성 실패: ${error?.message || String(error)}` }, { status: 500 });
   }
 }
 
