@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getCustomers } from '@/lib/db';
+import { getCustomers, getCustomersWithAnalyses } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,36 +12,37 @@ export async function GET(request: NextRequest) {
 
     const { userId } = authResult;
 
-    // Get search query parameter
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search') || '';
+    const withAnalyses = searchParams.get('withAnalyses') === 'true';
 
-    // Get all customers for the user
-    const allCustomers = getCustomers(userId) as Array<{
-      id: number;
-      name: string;
-      gender: string;
-      birth_date: string;
-      birth_time: string;
-      calendar_type: string;
-      phone: string;
-      email: string;
-      created_at: string;
-    }>;
+    if (withAnalyses) {
+      let customers = getCustomersWithAnalyses(userId) as any[];
+      if (search) {
+        const q = search.toLowerCase();
+        customers = customers.filter((c: any) =>
+          c.name?.toLowerCase().includes(q) ||
+          c.nickname?.toLowerCase().includes(q) ||
+          c.customer_code?.toLowerCase().includes(q)
+        );
+      }
+      return NextResponse.json({ customers, total: customers.length }, { status: 200 });
+    }
 
-    // Filter by search query if provided
+    const allCustomers = getCustomers(userId) as any[];
+
     let filteredCustomers = allCustomers;
     if (search) {
-      filteredCustomers = allCustomers.filter((customer) =>
-        customer.name.toLowerCase().includes(search.toLowerCase())
+      const q = search.toLowerCase();
+      filteredCustomers = allCustomers.filter((c: any) =>
+        c.name?.toLowerCase().includes(q) ||
+        c.nickname?.toLowerCase().includes(q) ||
+        c.customer_code?.toLowerCase().includes(q)
       );
     }
 
     return NextResponse.json(
-      {
-        customers: filteredCustomers,
-        total: filteredCustomers.length,
-      },
+      { customers: filteredCustomers, total: filteredCustomers.length },
       { status: 200 }
     );
   } catch (error) {

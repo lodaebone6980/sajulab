@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Fragment } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp, Play, CheckSquare, Upload } from 'lucide-react';
+import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp, Play, CheckSquare, Upload, Users, List, UserPlus } from 'lucide-react';
 
 interface Order {
   id: number;
@@ -29,6 +29,23 @@ interface Order {
   google_drive_url?: string;
   phone?: string;
   email?: string;
+  order_code?: string;
+  customer_code?: string;
+  nickname?: string;
+}
+
+interface CustomerGroup {
+  customer_id: number;
+  customer_code: string;
+  customer_name: string;
+  customer_nickname: string;
+  customer_gender: string;
+  customer_birth_date: string;
+  customer_birth_time: string;
+  customer_calendar_type: string;
+  phone: string;
+  email: string;
+  orders: Order[];
 }
 
 interface Product {
@@ -74,6 +91,17 @@ export default function OrdersPage() {
   const [formCode2, setFormCode2] = useState('');
   const [formAccount, setFormAccount] = useState('');
   const [formExtraQuestion, setFormExtraQuestion] = useState('');
+
+  // 그룹뷰
+  const [viewMode, setViewMode] = useState<'group' | 'list'>('group');
+  const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
+
+  // 고객 불러오기
+  const [showLoadCustomerModal, setShowLoadCustomerModal] = useState(false);
+  const [loadCustomerSearch, setLoadCustomerSearch] = useState('');
+  const [loadCustomerList, setLoadCustomerList] = useState<any[]>([]);
+  const [reusedCustomerId, setReusedCustomerId] = useState<number | null>(null);
 
   // 엑셀 업로드
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -158,18 +186,35 @@ export default function OrdersPage() {
       if (statusFilter !== 'all') params.set('status', statusFilter);
       if (productFilter) params.set('product', productFilter);
 
-      const response = await fetch(`/api/orders?${params.toString()}`);
-      if (response.ok) {
-        const data = await response.json();
-        setOrders(data.orders || []);
-        setTotal(data.total || 0);
+      if (viewMode === 'group') {
+        params.set('grouped', 'true');
+        const response = await fetch(`/api/orders?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCustomerGroups(data.customer_groups || []);
+          setTotal(data.total || 0);
+          // 모든 그룹 기본 펼침
+          if (expandedGroups.size === 0 && data.customer_groups?.length > 0) {
+            setExpandedGroups(new Set(data.customer_groups.map((g: any) => g.customer_id)));
+          }
+          // flat list도 업데이트 (폴링 호환)
+          const flatOrders = (data.customer_groups || []).flatMap((g: any) => g.orders);
+          setOrders(flatOrders);
+        }
+      } else {
+        const response = await fetch(`/api/orders?${params.toString()}`);
+        if (response.ok) {
+          const data = await response.json();
+          setOrders(data.orders || []);
+          setTotal(data.total || 0);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch orders:', err);
     } finally {
       if (showLoading) setIsLoading(false);
     }
-  }, [period, fromDate, toDate, search, statusFilter, productFilter]);
+  }, [period, fromDate, toDate, search, statusFilter, productFilter, viewMode]);
 
   const fetchProducts = async () => {
     try {
@@ -343,6 +388,38 @@ export default function OrdersPage() {
     return input;
   };
 
+  // 그룹 토글
+  const toggleGroup = (customerId: number) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(customerId)) next.delete(customerId); else next.add(customerId);
+      return next;
+    });
+  };
+
+  // 고객 불러오기
+  const fetchCustomersForLoad = async (q: string) => {
+    try {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLoadCustomerList(data.customers || []);
+      }
+    } catch {}
+  };
+  const loadCustomerData = (cus: any) => {
+    setFormName(cus.name || '');
+    setFormGender(cus.gender || 'male');
+    setFormBirthDate(cus.birth_date || '');
+    setFormBirthTime(cus.birth_time || '');
+    setFormCalendarType(cus.calendar_type || 'solar');
+    setFormPhone(cus.phone || '');
+    setFormEmail(cus.email || '');
+    setFormNickname(cus.nickname || '');
+    setReusedCustomerId(cus.id);
+    setShowLoadCustomerModal(false);
+  };
+
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formBirthDate || !formProductId) {
@@ -379,6 +456,7 @@ export default function OrdersPage() {
           code2: formCode2,
           account: formAccount,
           extraQuestion: formExtraQuestion,
+          ...(reusedCustomerId ? { customerId: reusedCustomerId } : {}),
         }),
       });
 
@@ -393,6 +471,7 @@ export default function OrdersPage() {
       setFormEmail(''); setFormMemo(''); setFormProductId('');
       setFormExtraAnswer(''); setFormInternalMemo('');
       setFormNickname(''); setFormCode2(''); setFormAccount(''); setFormExtraQuestion('');
+      setReusedCustomerId(null);
       setShowRegModal(false);
       fetchOrders();
     } catch (err: any) {
@@ -597,6 +676,23 @@ export default function OrdersPage() {
             <p className="text-sm text-gray-500 mt-1">분석 요청을 관리합니다</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* 뷰 전환 토글 */}
+            <div className="flex items-center bg-gray-200 rounded-lg p-0.5 mr-2">
+              <button
+                onClick={() => setViewMode('group')}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'group' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+              >
+                <Users size={14} />
+                그룹뷰
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${viewMode === 'list' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+              >
+                <List size={14} />
+                리스트뷰
+              </button>
+            </div>
             <button
               onClick={() => setShowExcelModal(true)}
               className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
@@ -726,7 +822,92 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          {orders.length > 0 ? (
+          {/* ========== 그룹뷰 ========== */}
+          {viewMode === 'group' && customerGroups.length > 0 && (
+            <div className="space-y-3">
+              {customerGroups.map(group => {
+                const isExpanded = expandedGroups.has(group.customer_id);
+                return (
+                  <div key={group.customer_id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    {/* 고객 헤더 */}
+                    <div
+                      onClick={() => toggleGroup(group.customer_id)}
+                      className="flex items-center gap-3 px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                    >
+                      {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                      <span className="font-bold text-gray-900">{group.customer_name}</span>
+                      {group.customer_code && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-mono">{group.customer_code}</span>
+                      )}
+                      {group.customer_nickname && (
+                        <span className="text-xs text-gray-500">({group.customer_nickname})</span>
+                      )}
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${group.customer_gender === 'male' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'}`}>
+                        {group.customer_gender === 'male' ? '남' : '여'}
+                      </span>
+                      <span className="text-xs text-gray-500">{group.customer_birth_date}</span>
+                      <span className="ml-auto text-xs text-gray-400">{group.orders.length}건</span>
+                    </div>
+                    {/* 주문 목록 */}
+                    {isExpanded && (
+                      <div className="divide-y divide-gray-100">
+                        {group.orders.map((order: any) => (
+                          <div key={order.id} className="flex items-center gap-3 px-6 py-2.5 hover:bg-gray-50 transition-colors text-sm">
+                            <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded font-mono min-w-[80px]">{order.order_code || `#${order.id}`}</span>
+                            <span className="text-gray-900 min-w-[100px]">{order.product_name}</span>
+                            <span>{getStatusBadge(order.status, order.progress, order.progress_message)}</span>
+                            {order.consultation_date && (
+                              <span className="text-xs text-gray-400">상담: {order.consultation_date}</span>
+                            )}
+                            <span className="text-xs text-gray-400 ml-auto">{formatDate(order.created_at)}</span>
+                            <div className="flex items-center gap-1">
+                              {order.status === 'completed' && order.pdf_url && (
+                                <a href={order.pdf_url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-green-600 hover:bg-green-50 rounded">
+                                  <Download size={14} />
+                                </a>
+                              )}
+                              {order.google_drive_url && (
+                                <a href={order.google_drive_url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Google Drive">
+                                  <FileText size={14} />
+                                </a>
+                              )}
+                              <button onClick={() => { setDetailOrder(order); setShowDetailModal(true); }} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
+                                <Eye size={14} />
+                              </button>
+                              {order.result_json && (
+                                <button onClick={() => { setDataOrder(order); setShowDataModal(true); setDataTab('summary'); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded">
+                                  <Database size={14} />
+                                </button>
+                              )}
+                              {(order.status === 'pending' || order.status === 'failed') && (
+                                <button onClick={() => handleReanalyze(order.id)} disabled={reanalyzingId === order.id} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded disabled:opacity-50">
+                                  <Play size={14} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* 그룹뷰에서 데이터 없을 때 */}
+          {viewMode === 'group' && customerGroups.length === 0 && !isLoading && (
+            <div className="py-20 text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                <FileText size={28} className="text-gray-400" />
+              </div>
+              <p className="text-gray-500 font-medium">작업이 없습니다.</p>
+              <p className="text-gray-400 text-sm mt-1">&quot;개별 등록&quot; 버튼으로 분석을 시작해보세요.</p>
+            </div>
+          )}
+
+          {/* ========== 리스트뷰 (기존) ========== */}
+          {viewMode === 'list' && orders.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
@@ -885,7 +1066,7 @@ export default function OrdersPage() {
                 </tbody>
               </table>
             </div>
-          ) : (
+          ) : viewMode === 'list' ? (
             <div className="py-20 text-center">
               <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
                 <FileText size={28} className="text-gray-400" />
@@ -893,7 +1074,7 @@ export default function OrdersPage() {
               <p className="text-gray-500 font-medium">작업이 없습니다.</p>
               <p className="text-gray-400 text-sm mt-1">&quot;개별 등록&quot; 버튼으로 분석을 시작해보세요.</p>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* ========== 개별 등록 Modal ========== */}
@@ -916,7 +1097,23 @@ export default function OrdersPage() {
 
                 {/* 고객 정보 */}
                 <div>
-                  <h4 className="text-sm font-bold text-gray-800 mb-3">고객 정보</h4>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-bold text-gray-800">고객 정보</h4>
+                    <button
+                      type="button"
+                      onClick={() => { setShowLoadCustomerModal(true); fetchCustomersForLoad(''); }}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      <UserPlus size={14} />
+                      기존 고객 불러오기
+                    </button>
+                  </div>
+                  {reusedCustomerId && (
+                    <div className="bg-blue-50 text-blue-700 px-3 py-1.5 rounded-lg text-xs mb-3 flex items-center justify-between">
+                      <span>기존 고객 연결됨 (ID: {reusedCustomerId})</span>
+                      <button type="button" onClick={() => setReusedCustomerId(null)} className="text-blue-500 hover:text-blue-700">해제</button>
+                    </div>
+                  )}
                   <div className="space-y-3">
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">이름 *</label>
@@ -1409,6 +1606,53 @@ export default function OrdersPage() {
                   >
                     닫기
                   </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* ========== 고객 불러오기 Modal ========== */}
+        {showLoadCustomerModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]" onClick={() => setShowLoadCustomerModal(false)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                <h3 className="text-sm font-bold text-gray-900">기존 고객 선택</h3>
+                <button onClick={() => setShowLoadCustomerModal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+              </div>
+              <div className="p-4">
+                <input
+                  type="text"
+                  placeholder="고객명 검색..."
+                  value={loadCustomerSearch}
+                  onChange={e => { setLoadCustomerSearch(e.target.value); fetchCustomersForLoad(e.target.value); }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3"
+                  autoFocus
+                />
+                <div className="max-h-[45vh] overflow-y-auto space-y-1">
+                  {loadCustomerList.filter((c: any) => {
+                    if (!loadCustomerSearch) return true;
+                    const q = loadCustomerSearch.toLowerCase();
+                    return c.name?.toLowerCase().includes(q) || c.nickname?.toLowerCase().includes(q) || c.customer_code?.toLowerCase().includes(q);
+                  }).map((cus: any) => (
+                    <div
+                      key={cus.id}
+                      onClick={() => loadCustomerData(cus)}
+                      className="p-3 rounded-lg cursor-pointer hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-900">{cus.name}</span>
+                        {cus.customer_code && <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono">{cus.customer_code}</span>}
+                        {cus.nickname && <span className="text-xs text-gray-400">({cus.nickname})</span>}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {cus.gender === 'male' ? '남' : '여'} · {cus.birth_date}
+                        {cus.calendar_type === 'lunar' ? ' · 음력' : cus.calendar_type === 'leap' ? ' · 윤달' : ''}
+                      </div>
+                    </div>
+                  ))}
+                  {loadCustomerList.length === 0 && (
+                    <p className="text-center text-gray-400 text-sm py-8">고객 데이터가 없습니다.</p>
+                  )}
                 </div>
               </div>
             </div>

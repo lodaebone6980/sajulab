@@ -11,6 +11,12 @@ import {
   updateOrderProgress,
   getPdfDir,
   getDb,
+  findCustomerByNameAndBirth,
+  assignCustomerCode,
+  assignOrderCode,
+  getOrdersGrouped,
+  getCustomerById,
+  updateCustomerNickname,
 } from '@/lib/db/index';
 import { uploadPdfToUserDrive } from '@/lib/google-drive/upload-helper';
 import { analyzeSajuWithFortune } from '@/lib/saju';
@@ -31,12 +37,27 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url);
+    const grouped = searchParams.get('grouped');
     const period = searchParams.get('period');
     const fromDate = searchParams.get('fromDate');
     const toDate = searchParams.get('toDate');
     const search = searchParams.get('search');
     const productId = searchParams.get('product');
     const status = searchParams.get('status');
+
+    // 그룹형 모드
+    if (grouped === 'true') {
+      const groups = getOrdersGrouped(userId, {
+        search: search || undefined,
+        status: status || undefined,
+        productId: productId || undefined,
+        period: period || undefined,
+        fromDate: fromDate || undefined,
+        toDate: toDate || undefined,
+      });
+      const totalOrders = groups.reduce((sum: number, g: any) => sum + g.orders.length, 0);
+      return NextResponse.json({ customer_groups: groups, total: totalOrders });
+    }
 
     let allOrders = getOrders(userId) as any[];
 
@@ -157,6 +178,7 @@ export async function POST(request: NextRequest) {
       extraQuestion = '',
       orderTime = '',
       consultationDate = '',
+      customerId: providedCustomerId,
     } = body;
 
     // Validate required fields
@@ -177,19 +199,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create customer
-    const customerResult = createCustomer(userId, {
-      name: customerName,
-      gender,
-      birth_date: birthDate,
-      birth_time: birthTime || '',
-      calendar_type: calendarType || 'solar',
-      phone,
-      email,
-      memo,
-    });
-
-    const customerId = customerResult.lastInsertRowid as number;
+    // 고객 재사용 로직: providedCustomerId → 이름+생년월일 매칭 → 신규 생성
+    let customerId: number;
+    if (providedCustomerId) {
+      const existing = getCustomerById(providedCustomerId, userId);
+      if (!existing) {
+        return NextResponse.json({ error: '고객을 찾을 수 없습니다.' }, { status: 404 });
+      }
+      customerId = providedCustomerId;
+    } else {
+      const matched = findCustomerByNameAndBirth(userId, customerName, birthDate);
+      if (matched) {
+        customerId = matched.id;
+        // 닉네임 업데이트 (없었으면)
+        if (nickname && !matched.nickname) {
+          updateCustomerNickname(matched.id, userId, nickname);
+        }
+      } else {
+        const customerResult = createCustomer(userId, {
+          name: customerName,
+          gender,
+          birth_date: birthDate,
+          birth_time: birthTime || '',
+          calendar_type: calendarType || 'solar',
+          phone,
+          email,
+          memo,
+        });
+        customerId = customerResult.lastInsertRowid as number;
+        assignCustomerCode(customerId);
+      }
+    }
 
     // Create order
     const orderResult = createOrder(userId, {
@@ -207,6 +247,7 @@ export async function POST(request: NextRequest) {
     });
 
     const orderId = orderResult.lastInsertRowid as number;
+    assignOrderCode(orderId);
 
     // Mark as requested immediately
     updateOrderStatus(orderId, userId, 'requested');

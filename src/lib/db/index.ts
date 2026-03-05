@@ -291,10 +291,71 @@ function initializeDb(db: Database.Database) {
     ['extra_question', "TEXT DEFAULT ''"],
     ['order_time', "TEXT DEFAULT ''"],
     ['consultation_date', "TEXT DEFAULT ''"],
+    ['order_code', "TEXT DEFAULT ''"],
   ];
   for (const [col, type] of orderNewCols) {
     try { db.exec(`ALTER TABLE orders ADD COLUMN ${col} ${type}`); } catch {}
   }
+
+  // Migration: customers 새 컬럼 추가 (고객코드, 닉네임)
+  const customerNewCols = [
+    ['customer_code', "TEXT DEFAULT ''"],
+    ['nickname', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of customerNewCols) {
+    try { db.exec(`ALTER TABLE customers ADD COLUMN ${col} ${type}`); } catch {}
+  }
+
+  // 인덱스 추가
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_customers_code ON customers(customer_code)`); } catch {}
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_orders_code ON orders(order_code)`); } catch {}
+  try { db.exec(`CREATE INDEX IF NOT EXISTS idx_customers_name_birth ON customers(user_id, name, birth_date)`); } catch {}
+
+  // Migration: 기존 customers에 customer_code 자동 부여
+  try {
+    const noCodes = db.prepare("SELECT id FROM customers WHERE customer_code = '' OR customer_code IS NULL").all() as { id: number }[];
+    for (const row of noCodes) {
+      db.prepare("UPDATE customers SET customer_code = ? WHERE id = ?").run(`CUS-${String(row.id).padStart(5, '0')}`, row.id);
+    }
+  } catch {}
+
+  // Migration: 기존 orders에 order_code 자동 부여
+  try {
+    const noOrderCodes = db.prepare("SELECT id FROM orders WHERE order_code = '' OR order_code IS NULL").all() as { id: number }[];
+    for (const row of noOrderCodes) {
+      db.prepare("UPDATE orders SET order_code = ? WHERE id = ?").run(`ORD-${String(row.id).padStart(5, '0')}`, row.id);
+    }
+  } catch {}
+
+  // Migration: orders.nickname → customers.nickname 이전 (첫 주문의 닉네임)
+  try {
+    const cusNoNick = db.prepare("SELECT id FROM customers WHERE (nickname = '' OR nickname IS NULL)").all() as { id: number }[];
+    for (const cus of cusNoNick) {
+      const firstOrder = db.prepare("SELECT nickname FROM orders WHERE customer_id = ? AND nickname != '' ORDER BY created_at ASC LIMIT 1").get(cus.id) as { nickname: string } | undefined;
+      if (firstOrder) {
+        db.prepare("UPDATE customers SET nickname = ? WHERE id = ?").run(firstOrder.nickname, cus.id);
+      }
+    }
+  } catch {}
+
+  // Migration: 중복 고객 병합 (같은 user_id + name + birth_date)
+  try {
+    const dupes = db.prepare(`
+      SELECT user_id, name, birth_date, MIN(id) as keep_id, GROUP_CONCAT(id) as all_ids
+      FROM customers
+      GROUP BY user_id, name, birth_date
+      HAVING COUNT(*) > 1
+    `).all() as { user_id: number; name: string; birth_date: string; keep_id: number; all_ids: string }[];
+    for (const dupe of dupes) {
+      const ids = dupe.all_ids.split(',').map(Number);
+      const mergeIds = ids.filter(id => id !== dupe.keep_id);
+      for (const oldId of mergeIds) {
+        db.prepare("UPDATE orders SET customer_id = ? WHERE customer_id = ?").run(dupe.keep_id, oldId);
+        db.prepare("UPDATE consultations SET customer_id = ? WHERE customer_id = ?").run(dupe.keep_id, oldId);
+        db.prepare("DELETE FROM customers WHERE id = ?").run(oldId);
+      }
+    }
+  } catch {}
 
   // Migration: cover_image column 추가
   try {
@@ -489,6 +550,144 @@ export function updateCustomer(id: number, userId: number, data: {
 export function deleteCustomer(id: number, userId: number) {
   const db = getDb();
   db.prepare('DELETE FROM customers WHERE id = ? AND user_id = ?').run(id, userId);
+}
+
+/** 이름+생년월일로 기존 고객 찾기 */
+export function findCustomerByNameAndBirth(userId: number, name: string, birthDate: string) {
+  const db = getDb();
+  return db.prepare('SELECT * FROM customers WHERE user_id = ? AND name = ? AND birth_date = ? LIMIT 1').get(userId, name, birthDate) as any | undefined;
+}
+
+/** 고객 코드 자동 생성 및 설정 */
+export function assignCustomerCode(customerId: number) {
+  const db = getDb();
+  const code = `CUS-${String(customerId).padStart(5, '0')}`;
+  db.prepare("UPDATE customers SET customer_code = ? WHERE id = ? AND (customer_code = '' OR customer_code IS NULL)").run(code, customerId);
+  return code;
+}
+
+/** 주문 코드 자동 생성 및 설정 */
+export function assignOrderCode(orderId: number) {
+  const db = getDb();
+  const code = `ORD-${String(orderId).padStart(5, '0')}`;
+  db.prepare("UPDATE orders SET order_code = ? WHERE id = ? AND (order_code = '' OR order_code IS NULL)").run(code, orderId);
+  return code;
+}
+
+/** 고객 + 분석 목록 조회 (고객관리 페이지용) */
+export function getCustomersWithAnalyses(userId: number) {
+  const db = getDb();
+  const customers = db.prepare(`
+    SELECT * FROM customers WHERE user_id = ? ORDER BY name ASC, created_at DESC
+  `).all(userId) as any[];
+
+  const products = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY sort_order ASC').all(userId) as any[];
+
+  for (const cus of customers) {
+    const analyses = db.prepare(`
+      SELECT p.id as product_id, p.code as product_code, p.name as product_name, COUNT(o.id) as order_count
+      FROM orders o
+      JOIN products p ON o.product_id = p.id
+      WHERE o.customer_id = ? AND o.user_id = ?
+      GROUP BY o.product_id
+    `).all(cus.id, userId) as any[];
+    cus.analyses = analyses;
+
+    const analyzedCodes = new Set(analyses.map((a: any) => a.product_code));
+    cus.unanalyzed_products = products.filter((p: any) => !analyzedCodes.has(p.code));
+  }
+  return customers;
+}
+
+/** 주문을 고객별로 그룹핑하여 조회 */
+export function getOrdersGrouped(userId: number, filters?: {
+  search?: string; status?: string; productId?: string;
+  period?: string; fromDate?: string; toDate?: string;
+}) {
+  const db = getDb();
+  let allOrders = db.prepare(`
+    SELECT o.*, c.name as customer_name, c.gender as customer_gender, c.birth_date as customer_birth_date,
+     c.birth_time as customer_birth_time, c.calendar_type as customer_calendar_type,
+     c.phone as phone, c.email as email, c.customer_code, c.nickname as customer_nickname,
+     p.name as product_name, p.code as product_code
+     FROM orders o
+     JOIN customers c ON o.customer_id = c.id
+     JOIN products p ON o.product_id = p.id
+     WHERE o.user_id = ?
+     ORDER BY c.name ASC, o.consultation_date DESC, o.created_at DESC
+  `).all(userId) as any[];
+
+  // Apply filters
+  if (filters?.search) {
+    const q = filters.search.toLowerCase();
+    allOrders = allOrders.filter((o: any) =>
+      (o.customer_name && o.customer_name.toLowerCase().includes(q)) ||
+      (o.phone && o.phone.includes(q)) ||
+      (o.email && o.email.toLowerCase().includes(q)) ||
+      (o.nickname && o.nickname.toLowerCase().includes(q)) ||
+      (o.customer_code && o.customer_code.toLowerCase().includes(q)) ||
+      (o.order_code && o.order_code.toLowerCase().includes(q))
+    );
+  }
+  if (filters?.status && filters.status !== 'all') {
+    allOrders = allOrders.filter((o: any) => o.status === filters.status);
+  }
+  if (filters?.productId) {
+    allOrders = allOrders.filter((o: any) => o.product_id.toString() === filters.productId);
+  }
+  if (filters?.period && filters.period !== 'all') {
+    const now = new Date();
+    let filterDate = new Date();
+    switch (filters.period) {
+      case 'today': filterDate.setHours(0, 0, 0, 0); break;
+      case 'yesterday': filterDate.setDate(filterDate.getDate() - 1); filterDate.setHours(0, 0, 0, 0); break;
+      case '3days': filterDate.setDate(filterDate.getDate() - 3); break;
+      case '7days': filterDate.setDate(filterDate.getDate() - 7); break;
+      case '30days': filterDate.setDate(filterDate.getDate() - 30); break;
+    }
+    allOrders = allOrders.filter((o: any) => {
+      const d = new Date(o.created_at);
+      if (filters.period === 'today') return d.toDateString() === now.toDateString();
+      if (filters.period === 'yesterday') { const y = new Date(now); y.setDate(y.getDate()-1); return d.toDateString() === y.toDateString(); }
+      return d >= filterDate;
+    });
+  }
+  if (filters?.fromDate) {
+    const from = new Date(filters.fromDate); from.setHours(0,0,0,0);
+    allOrders = allOrders.filter((o: any) => new Date(o.created_at) >= from);
+  }
+  if (filters?.toDate) {
+    const to = new Date(filters.toDate); to.setHours(23,59,59,999);
+    allOrders = allOrders.filter((o: any) => new Date(o.created_at) <= to);
+  }
+
+  // Group by customer_id
+  const groupMap = new Map<number, any>();
+  for (const order of allOrders) {
+    if (!groupMap.has(order.customer_id)) {
+      groupMap.set(order.customer_id, {
+        customer_id: order.customer_id,
+        customer_code: order.customer_code || '',
+        customer_name: order.customer_name,
+        customer_nickname: order.customer_nickname || order.nickname || '',
+        customer_gender: order.customer_gender,
+        customer_birth_date: order.customer_birth_date,
+        customer_birth_time: order.customer_birth_time,
+        customer_calendar_type: order.customer_calendar_type,
+        phone: order.phone || '',
+        email: order.email || '',
+        orders: [],
+      });
+    }
+    groupMap.get(order.customer_id)!.orders.push(order);
+  }
+  return Array.from(groupMap.values());
+}
+
+/** 고객 닉네임 업데이트 */
+export function updateCustomerNickname(id: number, userId: number, nickname: string) {
+  const db = getDb();
+  db.prepare("UPDATE customers SET nickname = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").run(nickname, id, userId);
 }
 
 // ============ 상품 ============

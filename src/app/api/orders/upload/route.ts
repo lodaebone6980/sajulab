@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { createOrder, createCustomer, getProducts, updateOrderStatus, updateOrderProgress } from '@/lib/db/index';
+import { createOrder, createCustomer, getProducts, updateOrderStatus, updateOrderProgress, findCustomerByNameAndBirth, assignCustomerCode, assignOrderCode, updateCustomerNickname } from '@/lib/db/index';
 
 // 간지시간 → 시각 매핑
 const GANJI_TO_TIME: Record<string, string> = {
@@ -126,18 +126,30 @@ export async function POST(request: NextRequest) {
         const orderTime = parseExcelTime(row['시각']);
         const consultationDate = parseExcelDate(row['상담날짜']);
 
-        // Create customer
-        const customerResult = createCustomer(userId, {
-          name,
-          gender,
-          birth_date: birthDate,
-          birth_time: birthTime,
-          calendar_type: calendarType,
-          phone: '',
-          email: '',
-          memo: '',
-        });
-        const customerId = customerResult.lastInsertRowid as number;
+        const nicknameVal = String(row['닉네임'] || '').trim();
+
+        // 고객 재사용: 이름+생년월일로 검색
+        let customerId: number;
+        const matched = findCustomerByNameAndBirth(userId, name, birthDate);
+        if (matched) {
+          customerId = matched.id;
+          if (nicknameVal && !matched.nickname) {
+            updateCustomerNickname(matched.id, userId, nicknameVal);
+          }
+        } else {
+          const customerResult = createCustomer(userId, {
+            name,
+            gender,
+            birth_date: birthDate,
+            birth_time: birthTime,
+            calendar_type: calendarType,
+            phone: '',
+            email: '',
+            memo: '',
+          });
+          customerId = customerResult.lastInsertRowid as number;
+          assignCustomerCode(customerId);
+        }
 
         // Create order
         const orderResult = createOrder(userId, {
@@ -146,7 +158,7 @@ export async function POST(request: NextRequest) {
           points_used: 0,
           extra_answer: '',
           internal_memo: '',
-          nickname: String(row['닉네임'] || '').trim(),
+          nickname: nicknameVal,
           code2: String(row['코드2'] || '').trim(),
           account: String(row['계정'] || '').trim(),
           extra_question: String(row['추가질문'] || '').trim(),
@@ -155,6 +167,7 @@ export async function POST(request: NextRequest) {
         });
 
         const orderId = orderResult.lastInsertRowid as number;
+        assignOrderCode(orderId);
         updateOrderStatus(orderId, userId, 'pending');
 
         results.push({ row: i + 1, success: true, orderId, name });
