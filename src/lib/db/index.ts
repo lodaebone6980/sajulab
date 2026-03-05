@@ -126,10 +126,7 @@ function initializeDb(db: Database.Database) {
       additional_payment TEXT DEFAULT '',
       note TEXT DEFAULT '',
       consultation_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (user_id) REFERENCES users(id),
-      FOREIGN KEY (customer_id) REFERENCES customers(id),
-      FOREIGN KEY (order_id) REFERENCES orders(id)
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     -- 직원
@@ -242,14 +239,12 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_saju_narratives_order_id ON saju_narratives(order_id);
   `);
 
-  // Migration: consultations 테이블 재생성 (FOREIGN KEY 제약 제거, 컬럼 추가)
-  // 기존 테이블에 customer_id NOT NULL + FOREIGN KEY가 있어 새 레코드 생성 불가 → 재생성
+  // Migration: consultations 테이블 재생성 (FOREIGN KEY 제약 제거)
+  // 기존 테이블에 customer_id FOREIGN KEY가 있어 새 레코드 생성 불가 → FOREIGN KEY 없는 테이블로 재생성
   try {
-    const hasNameCol = db.prepare("SELECT COUNT(*) as cnt FROM pragma_table_info('consultations') WHERE name='name'").get() as any;
-    if (!hasNameCol || hasNameCol.cnt === 0) {
-      // 기존 구조 → 새 구조로 재생성 (데이터 백업 후 이전)
+    const fkList = db.prepare("SELECT COUNT(*) as cnt FROM pragma_foreign_key_list('consultations')").get() as any;
+    if (fkList && fkList.cnt > 0) {
       db.exec(`
-        CREATE TABLE IF NOT EXISTS consultations_backup AS SELECT * FROM consultations;
         DROP TABLE IF EXISTS consultations;
         CREATE TABLE consultations (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -275,9 +270,8 @@ function initializeDb(db: Database.Database) {
           consultation_date DATETIME DEFAULT CURRENT_TIMESTAMP,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        DROP TABLE IF EXISTS consultations_backup;
       `);
-      console.log('[DB Migration] consultations 테이블 재생성 완료');
+      console.log('[DB Migration] consultations 테이블 재생성 완료 (FK 제거)');
     }
   } catch (e) {
     console.error('[DB Migration] consultations 재생성 실패:', e);
