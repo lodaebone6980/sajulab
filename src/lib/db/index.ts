@@ -634,14 +634,10 @@ export function createConsultation(userId: number, data: {
   note?: string;
 }) {
   const db = getDb();
-  const stmt = db.prepare(
-    `INSERT INTO consultations (user_id, customer_id, order_id, date, chat_history, chat_link, status, gender, name, birth_date, calendar_type, birth_time, ganji, email, product, amount, question, additional_payment, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
-  return stmt.run(
+  // customer_id, order_id가 없으면 INSERT에서 제외 (기존 DB NOT NULL 호환)
+  const cols = ['user_id', 'date', 'chat_history', 'chat_link', 'status', 'gender', 'name', 'birth_date', 'calendar_type', 'birth_time', 'ganji', 'email', 'product', 'amount', 'question', 'additional_payment', 'note'];
+  const vals: any[] = [
     userId,
-    data.customer_id || null,
-    data.order_id || null,
     data.date || new Date().toISOString().split('T')[0],
     data.chat_history || '',
     data.chat_link || '',
@@ -658,7 +654,12 @@ export function createConsultation(userId: number, data: {
     data.question || '',
     data.additional_payment || '',
     data.note || ''
-  );
+  ];
+  if (data.customer_id) { cols.push('customer_id'); vals.push(data.customer_id); }
+  if (data.order_id) { cols.push('order_id'); vals.push(data.order_id); }
+  const placeholders = cols.map(() => '?').join(', ');
+  const stmt = db.prepare(`INSERT INTO consultations (${cols.join(', ')}) VALUES (${placeholders})`);
+  return stmt.run(...vals);
 }
 
 export function getConsultations(userId: number, filters?: { date?: string; status?: string; search?: string }) {
