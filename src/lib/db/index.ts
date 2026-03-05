@@ -239,11 +239,11 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_saju_narratives_order_id ON saju_narratives(order_id);
   `);
 
-  // Migration: consultations 테이블 재생성 (FOREIGN KEY 제약 제거)
-  // 기존 테이블에 customer_id FOREIGN KEY가 있어 새 레코드 생성 불가 → FOREIGN KEY 없는 테이블로 재생성
+  // Migration: consultations 테이블 재생성 (NOT NULL/FK 제약 제거)
+  // 기존 테이블에 customer_id NOT NULL이 있어 새 레코드 생성 불가 → 재생성
   try {
-    const fkList = db.prepare("SELECT COUNT(*) as cnt FROM pragma_foreign_key_list('consultations')").get() as any;
-    if (fkList && fkList.cnt > 0) {
+    const custCol = db.prepare("SELECT [notnull] as nn FROM pragma_table_info('consultations') WHERE name='customer_id'").get() as any;
+    if (custCol && custCol.nn === 1) {
       db.exec(`
         DROP TABLE IF EXISTS consultations;
         CREATE TABLE consultations (
@@ -271,7 +271,7 @@ function initializeDb(db: Database.Database) {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      console.log('[DB Migration] consultations 테이블 재생성 완료 (FK 제거)');
+      console.log('[DB Migration] consultations 테이블 재생성 완료 (NOT NULL/FK 제거)');
     }
   } catch (e) {
     console.error('[DB Migration] consultations 재생성 실패:', e);
