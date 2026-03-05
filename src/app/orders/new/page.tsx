@@ -28,6 +28,10 @@ export default function NewOrderPage() {
   const [memo, setMemo] = useState('');
   const [productId, setProductId] = useState('');
   const [internalMemo, setInternalMemo] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [code2, setCode2] = useState('');
+  const [account, setAccount] = useState('');
+  const [extraQuestion, setExtraQuestion] = useState('');
 
   useEffect(() => {
     fetchProducts();
@@ -76,6 +80,10 @@ export default function NewOrderPage() {
           email,
           memo,
           internalMemo,
+          nickname,
+          code2,
+          account,
+          extraQuestion,
         }),
       });
 
@@ -164,6 +172,33 @@ export default function NewOrderPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">닉네임</label>
+                  <input
+                    type="text" value={nickname} onChange={e => setNickname(e.target.value)}
+                    placeholder="닉네임"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">코드2</label>
+                  <input
+                    type="text" value={code2} onChange={e => setCode2(e.target.value)}
+                    placeholder="코드2"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">계정</label>
+                  <input
+                    type="text" value={account} onChange={e => setAccount(e.target.value)}
+                    placeholder="계정"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">음양력</label>
                 <select
@@ -226,6 +261,16 @@ export default function NewOrderPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">추가질문</label>
+                <textarea
+                  value={extraQuestion} onChange={e => setExtraQuestion(e.target.value)}
+                  placeholder="고객의 추가 질문 내용"
+                  rows={3}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-pink-500"
+                />
               </div>
 
               <div>

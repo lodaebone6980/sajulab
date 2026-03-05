@@ -93,6 +93,12 @@ function initializeDb(db: Database.Database) {
       extra_answer TEXT DEFAULT '',
       internal_memo TEXT DEFAULT '',
       points_used INTEGER DEFAULT 0,
+      nickname TEXT DEFAULT '',
+      code2 TEXT DEFAULT '',
+      account TEXT DEFAULT '',
+      extra_question TEXT DEFAULT '',
+      order_time TEXT DEFAULT '',
+      consultation_date TEXT DEFAULT '',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       completed_at DATETIME,
@@ -275,6 +281,19 @@ function initializeDb(db: Database.Database) {
     }
   } catch (e) {
     console.error('[DB Migration] consultations 재생성 실패:', e);
+  }
+
+  // Migration: orders 새 컬럼 추가 (닉네임, 코드2, 계정, 추가질문, 시각, 상담날짜)
+  const orderNewCols = [
+    ['nickname', "TEXT DEFAULT ''"],
+    ['code2', "TEXT DEFAULT ''"],
+    ['account', "TEXT DEFAULT ''"],
+    ['extra_question', "TEXT DEFAULT ''"],
+    ['order_time', "TEXT DEFAULT ''"],
+    ['consultation_date', "TEXT DEFAULT ''"],
+  ];
+  for (const [col, type] of orderNewCols) {
+    try { db.exec(`ALTER TABLE orders ADD COLUMN ${col} ${type}`); } catch {}
   }
 
   // Migration: cover_image column 추가
@@ -513,12 +532,19 @@ export function deleteProduct(id: number, userId: number) {
 // ============ 주문 ============
 export function createOrder(userId: number, data: {
   customer_id: number; product_id: number; points_used: number; extra_answer?: string; internal_memo?: string;
+  nickname?: string; code2?: string; account?: string; extra_question?: string; order_time?: string; consultation_date?: string;
 }) {
   const db = getDb();
   const stmt = db.prepare(
-    'INSERT INTO orders (user_id, customer_id, product_id, status, points_used, extra_answer, internal_memo) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    `INSERT INTO orders (user_id, customer_id, product_id, status, points_used, extra_answer, internal_memo, nickname, code2, account, extra_question, order_time, consultation_date)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  return stmt.run(userId, data.customer_id, data.product_id, 'pending', data.points_used, data.extra_answer || '', data.internal_memo || '');
+  return stmt.run(
+    userId, data.customer_id, data.product_id, 'pending', data.points_used,
+    data.extra_answer || '', data.internal_memo || '',
+    data.nickname || '', data.code2 || '', data.account || '',
+    data.extra_question || '', data.order_time || '', data.consultation_date || ''
+  );
 }
 
 export function getOrders(userId: number, status?: string) {
@@ -527,6 +553,7 @@ export function getOrders(userId: number, status?: string) {
     return db.prepare(
       `SELECT o.*, c.name as customer_name, c.gender as customer_gender, c.birth_date as customer_birth_date,
        c.birth_time as customer_birth_time, c.calendar_type as customer_calendar_type,
+       c.phone as phone, c.email as email,
        p.name as product_name, p.code as product_code
        FROM orders o
        JOIN customers c ON o.customer_id = c.id

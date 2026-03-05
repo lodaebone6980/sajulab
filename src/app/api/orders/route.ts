@@ -151,6 +151,12 @@ export async function POST(request: NextRequest) {
       memo = '',
       extraAnswer = '',
       internalMemo = '',
+      nickname = '',
+      code2 = '',
+      account = '',
+      extraQuestion = '',
+      orderTime = '',
+      consultationDate = '',
     } = body;
 
     // Validate required fields
@@ -192,6 +198,12 @@ export async function POST(request: NextRequest) {
       points_used: 0,
       extra_answer: extraAnswer,
       internal_memo: internalMemo,
+      nickname,
+      code2,
+      account,
+      extra_question: extraQuestion,
+      order_time: orderTime,
+      consultation_date: consultationDate,
     });
 
     const orderId = orderResult.lastInsertRowid as number;

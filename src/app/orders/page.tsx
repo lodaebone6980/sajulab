@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Fragment } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp, Play, CheckSquare } from 'lucide-react';
+import { FileText, X, Search, Filter, Download, Plus, Eye, Database, MessageSquare, Edit3, RefreshCw, ChevronDown, ChevronUp, Play, CheckSquare, Upload } from 'lucide-react';
 
 interface Order {
   id: number;
@@ -70,6 +70,17 @@ export default function OrdersPage() {
   const [formProductId, setFormProductId] = useState('');
   const [formExtraAnswer, setFormExtraAnswer] = useState('');
   const [formInternalMemo, setFormInternalMemo] = useState('');
+  const [formNickname, setFormNickname] = useState('');
+  const [formCode2, setFormCode2] = useState('');
+  const [formAccount, setFormAccount] = useState('');
+  const [formExtraQuestion, setFormExtraQuestion] = useState('');
+
+  // 엑셀 업로드
+  const [showExcelModal, setShowExcelModal] = useState(false);
+  const [excelData, setExcelData] = useState<any[]>([]);
+  const [excelProductCode, setExcelProductCode] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<any>(null);
 
   // 정보수정 Modal
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -197,6 +208,49 @@ export default function OrdersPage() {
     setProductFilter('');
   };
 
+  // === 엑셀 업로드 ===
+  const handleExcelFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const XLSX = await import('xlsx');
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data);
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      setExcelData(rows as any[]);
+      setUploadResult(null);
+    } catch (err) {
+      console.error('Excel parse error:', err);
+      alert('엑셀 파일을 읽는데 실패했습니다.');
+    }
+    // Reset file input
+    e.target.value = '';
+  };
+
+  const handleExcelUpload = async () => {
+    if (excelData.length === 0 || !excelProductCode) return;
+    setIsUploading(true);
+    setUploadResult(null);
+    try {
+      const res = await fetch('/api/orders/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: excelData, productCode: excelProductCode }),
+      });
+      const result = await res.json();
+      setUploadResult(result);
+      if (result.success) {
+        fetchOrders();
+      }
+    } catch (err) {
+      setUploadResult({ error: '업로드 중 오류가 발생했습니다.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const getStatusBadge = (status: string, progress?: number, progressMessage?: string) => {
     const styles: Record<string, string> = {
       pending: 'bg-gray-100 text-gray-600',
@@ -321,6 +375,10 @@ export default function OrdersPage() {
           memo: formMemo,
           extraAnswer: formExtraAnswer,
           internalMemo: formInternalMemo,
+          nickname: formNickname,
+          code2: formCode2,
+          account: formAccount,
+          extraQuestion: formExtraQuestion,
         }),
       });
 
@@ -334,6 +392,7 @@ export default function OrdersPage() {
       setFormBirthTimeGanji(''); setFormCalendarType('solar'); setFormPhone('');
       setFormEmail(''); setFormMemo(''); setFormProductId('');
       setFormExtraAnswer(''); setFormInternalMemo('');
+      setFormNickname(''); setFormCode2(''); setFormAccount(''); setFormExtraQuestion('');
       setShowRegModal(false);
       fetchOrders();
     } catch (err: any) {
@@ -537,13 +596,22 @@ export default function OrdersPage() {
             <h1 className="text-2xl font-bold text-gray-900">주문 관리</h1>
             <p className="text-sm text-gray-500 mt-1">분석 요청을 관리합니다</p>
           </div>
-          <button
-            onClick={() => setShowRegModal(true)}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            <Plus size={16} />
-            개별 등록
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowExcelModal(true)}
+              className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <Upload size={16} />
+              엑셀 등록
+            </button>
+            <button
+              onClick={() => setShowRegModal(true)}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              <Plus size={16} />
+              개별 등록
+            </button>
+          </div>
         </div>
 
         {/* Period Filters */}
@@ -937,6 +1005,20 @@ export default function OrdersPage() {
                         <input type="email" value={formEmail} onChange={e => setFormEmail(e.target.value)} placeholder="example@email.com" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                       </div>
                     </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">닉네임</label>
+                        <input type="text" value={formNickname} onChange={e => setFormNickname(e.target.value)} placeholder="닉네임" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">코드2</label>
+                        <input type="text" value={formCode2} onChange={e => setFormCode2(e.target.value)} placeholder="코드2" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">계정</label>
+                        <input type="text" value={formAccount} onChange={e => setFormAccount(e.target.value)} placeholder="계정" className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -959,6 +1041,16 @@ export default function OrdersPage() {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">추가질문</label>
+                      <textarea
+                        value={formExtraQuestion}
+                        onChange={e => setFormExtraQuestion(e.target.value)}
+                        placeholder="고객의 추가 질문 내용"
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">추가답변 (선택)</label>
@@ -1197,6 +1289,127 @@ export default function OrdersPage() {
                 <p className="text-xs text-gray-400 mt-2">
                   총 {(dataTab === 'summary' ? getResultSummary(dataOrder) : getResultDataLines(dataOrder)).split('\n').length}줄
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== 엑셀 업로드 Modal ========== */}
+        {showExcelModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => { setShowExcelModal(false); setExcelData([]); setUploadResult(null); }}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <h3 className="text-lg font-bold text-gray-900">엑셀 등록</h3>
+                <button onClick={() => { setShowExcelModal(false); setExcelData([]); setUploadResult(null); }} className="text-gray-400 hover:text-gray-600">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  엑셀 파일(.xlsx)을 업로드하면 자동으로 주문이 일괄 등록됩니다.<br />
+                  <span className="text-gray-400">필수 컬럼: 이름, 생년월일, 성별 | 선택: 양/음력, 탄생시각, 닉네임, 코드2, 계정, 추가질문</span>
+                </p>
+
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">상품 선택 *</label>
+                    <select
+                      value={excelProductCode}
+                      onChange={e => setExcelProductCode(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    >
+                      <option value="">상품을 선택하세요</option>
+                      {products.map(product => (
+                        <option key={product.id} value={product.code}>
+                          {product.name} ({product.price_points?.toLocaleString() || 0} P)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">엑셀 파일</label>
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      onChange={handleExcelFileChange}
+                      className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 file:mr-2 file:py-1 file:px-3 file:border-0 file:text-sm file:bg-green-50 file:text-green-700 file:rounded"
+                    />
+                  </div>
+                </div>
+
+                {excelData.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-700 mb-2">미리보기 ({excelData.length}건)</h4>
+                    <div className="max-h-64 overflow-auto border border-gray-200 rounded-lg">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">#</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">이름</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">성별</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">생년월일</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">양/음력</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">탄생시각</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">닉네임</th>
+                            <th className="px-2 py-1.5 text-left font-medium text-gray-600">추가질문</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {excelData.slice(0, 50).map((row, i) => (
+                            <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                              <td className="px-2 py-1 text-gray-400">{i + 1}</td>
+                              <td className="px-2 py-1 font-medium">{row['이름'] || '-'}</td>
+                              <td className="px-2 py-1">{row['성별'] || '-'}</td>
+                              <td className="px-2 py-1">{String(row['생년월일'] || '-').slice(0, 10)}</td>
+                              <td className="px-2 py-1">{row['양/음력'] || '-'}</td>
+                              <td className="px-2 py-1">{row['탄생시각'] || '-'}</td>
+                              <td className="px-2 py-1">{row['닉네임'] || '-'}</td>
+                              <td className="px-2 py-1 max-w-[200px] truncate">{row['추가질문'] || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {excelData.length > 50 && <p className="text-xs text-gray-400 mt-1">... 외 {excelData.length - 50}건 더</p>}
+                  </div>
+                )}
+
+                {uploadResult && (
+                  <div className={`p-3 rounded-lg text-sm ${uploadResult.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+                    {uploadResult.success ? (
+                      <>
+                        <p className="font-medium">{uploadResult.message}</p>
+                        {uploadResult.failCount > 0 && (
+                          <div className="mt-2 text-xs">
+                            <p className="font-medium text-red-600">실패 항목:</p>
+                            {uploadResult.results?.filter((r: any) => !r.success).map((r: any, i: number) => (
+                              <p key={i}>{r.row}행: {r.name || '이름없음'} - {r.error}</p>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p>{uploadResult.error}</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 pt-2">
+                  <button
+                    onClick={handleExcelUpload}
+                    disabled={isUploading || excelData.length === 0 || !excelProductCode}
+                    className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white font-medium py-2.5 rounded-lg transition-colors text-sm"
+                  >
+                    {isUploading ? '업로드 중...' : `${excelData.length}건 일괄 등록`}
+                  </button>
+                  <button
+                    onClick={() => { setShowExcelModal(false); setExcelData([]); setUploadResult(null); }}
+                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2.5 rounded-lg transition-colors text-sm"
+                  >
+                    닫기
+                  </button>
+                </div>
               </div>
             </div>
           </div>
