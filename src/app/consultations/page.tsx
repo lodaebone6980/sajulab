@@ -75,6 +75,7 @@ export default function ConsultationsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [formData, setFormData] = useState({ ...emptyConsultation });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const fetchConsultations = useCallback(async () => {
     try {
@@ -182,9 +183,12 @@ export default function ConsultationsPage() {
   };
 
   // 선택 삭제
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (selectedIds.size === 0) return;
-    if (!confirm(`${selectedIds.size}건의 기록을 삭제하시겠습니까?`)) return;
+    setShowDeleteConfirm(true);
+  };
+  const confirmDelete = async () => {
+    setShowDeleteConfirm(false);
     try {
       await fetch('/api/consultations', {
         method: 'DELETE',
@@ -432,6 +436,20 @@ export default function ConsultationsPage() {
           </div>
         </div>
       </div>
+
+      {/* Delete Confirm Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl p-6 mx-4 max-w-sm">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">삭제 확인</h3>
+            <p className="text-gray-600 mb-6">{selectedIds.size}건의 기록을 삭제하시겠습니까?</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">취소</button>
+              <button onClick={confirmDelete} className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600">삭제</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
