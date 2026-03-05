@@ -139,6 +139,12 @@ export default function OrdersPage() {
   const [dataOrder, setDataOrder] = useState<Order | null>(null);
   const [dataTab, setDataTab] = useState<'summary' | 'full'>('summary');
 
+  // 텍스트 변환 Modal
+  const [showTextModal, setShowTextModal] = useState(false);
+  const [textContent, setTextContent] = useState('');
+  const [textLoading, setTextLoading] = useState(false);
+  const [textOrderInfo, setTextOrderInfo] = useState<{name: string; product: string} | null>(null);
+
   // 추가답변 Inline
   const [expandedAnswerId, setExpandedAnswerId] = useState<number | null>(null);
   const [extraAnswerText, setExtraAnswerText] = useState('');
@@ -596,6 +602,28 @@ export default function OrdersPage() {
     }
   };
 
+  // === 텍스트 변환 ===
+  const openTextModal = async (orderId: number) => {
+    setTextLoading(true);
+    setTextContent('');
+    setShowTextModal(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/text`);
+      if (!res.ok) throw new Error('텍스트 로드 실패');
+      const data = await res.json();
+      setTextContent(data.text || '데이터 없음');
+      setTextOrderInfo({ name: data.customer_name, product: data.product_name });
+    } catch (err) {
+      setTextContent('텍스트 변환 중 오류가 발생했습니다.');
+    } finally {
+      setTextLoading(false);
+    }
+  };
+
+  const downloadText = (orderId: number) => {
+    window.open(`/api/orders/${orderId}/text?format=download`, '_blank');
+  };
+
   // === 데이터 ===
   const openDataModal = (order: Order) => {
     setDataOrder(order);
@@ -965,16 +993,30 @@ export default function OrdersPage() {
                               const loveOrder = code === 'saju-love' ? info.orders.find((o: any) => o.partner_name) : null;
                               const partnerLabel = loveOrder ? ` (${loveOrder.partner_name}과)` : '';
 
+                              // 완료된 주문 중 PDF가 있는 경우 링크로 연결
+                              const completedWithDrive = info.orders.find((o: any) => o.status === 'completed' && o.google_drive_url);
+                              const completedWithPdf = info.orders.find((o: any) => o.status === 'completed' && o.pdf_url);
+
+                              const handleBadgeClick = () => {
+                                if (allCompleted && completedWithDrive) {
+                                  // Google Drive PDF 열기
+                                  window.open(completedWithDrive.google_drive_url, '_blank');
+                                } else if (allCompleted && completedWithPdf && code !== 'saju-data') {
+                                  // 로컬 PDF 열기
+                                  window.open(completedWithPdf.pdf_url, '_blank');
+                                } else {
+                                  // 상세 모달 열기
+                                  const firstOrder = info.orders[0];
+                                  if (firstOrder) openDetailModal(firstOrder);
+                                }
+                              };
+
                               return (
                                 <span
                                   key={code}
-                                  className={`px-2 py-0.5 text-xs rounded cursor-pointer hover:opacity-80 ${badgeStyle}`}
-                                  title={`${info.productName}${partnerLabel} - ${info.orders.length}건${anyActive ? ' (처리중)' : anyFailed ? ' (실패)' : anyPending ? ' (대기)' : ' (완료)'}`}
-                                  onClick={() => {
-                                    // 클릭하면 해당 주문 상세보기 (첫번째 주문)
-                                    const firstOrder = info.orders[0];
-                                    if (firstOrder) openDetailModal(firstOrder);
-                                  }}
+                                  className={`px-2 py-0.5 text-xs rounded cursor-pointer hover:opacity-80 ${badgeStyle} ${allCompleted && (completedWithDrive || completedWithPdf) && code !== 'saju-data' ? 'underline decoration-dotted' : ''}`}
+                                  title={`${info.productName}${partnerLabel} - ${info.orders.length}건${anyActive ? ' (처리중)' : anyFailed ? ' (실패)' : anyPending ? ' (대기)' : ' (완료)'}${allCompleted && completedWithDrive ? ' - 클릭하여 Google Drive PDF 열기' : allCompleted && completedWithPdf && code !== 'saju-data' ? ' - 클릭하여 PDF 열기' : ''}`}
+                                  onClick={handleBadgeClick}
                                 >
                                   {info.productName}{info.orders.length > 1 ? ` (${info.orders.length})` : ''}{statusIndicator}{partnerLabel}
                                 </span>
@@ -983,34 +1025,30 @@ export default function OrdersPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            {/* 완료된 PDF 다운로드 */}
-                            {group.orders.filter((o: any) => o.status === 'completed' && o.pdf_url).length > 0 && (
-                              <div className="relative group/dl">
-                                <button className="p-1.5 text-green-600 hover:bg-green-50 rounded">
-                                  <Download size={14} />
-                                </button>
-                                <div className="hidden group-hover/dl:block absolute right-0 top-full z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-                                  {group.orders.filter((o: any) => o.status === 'completed' && o.pdf_url).map((o: any) => (
-                                    <a key={o.id} href={o.pdf_url} target="_blank" rel="noopener noreferrer" className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
-                                      {o.product_name}
-                                    </a>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            {/* 대기/실패 주문 일괄 분석 시작 */}
+                          <div className="flex items-center gap-2">
+                            {/* 대기/실패 주문 일괄 분석 실행 버튼 */}
                             {(hasPendingOrder || hasFailedOrder) && (
                               <button
                                 onClick={() => {
                                   const targets = group.orders.filter((o: any) => o.status === 'pending' || o.status === 'failed');
                                   targets.forEach((o: any) => handleReanalyze(o.id));
                                 }}
-                                className="p-1.5 text-orange-500 hover:bg-orange-50 rounded"
-                                title="대기/실패 주문 분석 시작"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white text-xs font-medium rounded-lg transition-colors"
                               >
-                                <Play size={14} />
+                                <Play size={12} />
+                                실행
                               </button>
+                            )}
+                            {/* 진행중 표시 */}
+                            {hasActiveOrder && (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg">
+                                <RefreshCw size={12} className="animate-spin" />
+                                분석중
+                              </span>
+                            )}
+                            {/* 모두 완료 시 */}
+                            {!hasPendingOrder && !hasFailedOrder && !hasActiveOrder && group.orders.every((o: any) => o.status === 'completed') && (
+                              <span className="text-xs text-green-600 font-medium">완료</span>
                             )}
                           </div>
                         </td>
@@ -1599,26 +1637,56 @@ export default function OrdersPage() {
                 </div>
 
                 {/* 액션 버튼 */}
-                <div className="flex items-center gap-2 pt-2">
-                  {detailOrder.status === 'completed' && detailOrder.product_code !== 'saju-data' && (
-                    <a
-                      href={`/api/orders/${detailOrder.id}/pdf`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 text-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
-                    >
-                      PDF 보기
-                    </a>
-                  )}
-                  {['failed', 'pending', 'completed', 'analyzing', 'pdf_generating'].includes(detailOrder.status) && (
-                    <button
-                      onClick={() => { handleReanalyze(detailOrder.id); setShowDetailModal(false); }}
-                      disabled={reanalyzingId === detailOrder.id}
-                      className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
-                    >
-                      <RefreshCw size={12} className={`inline mr-1 ${reanalyzingId === detailOrder.id ? 'animate-spin' : ''}`} />
-                      재분석
-                    </button>
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center gap-2">
+                    {detailOrder.status === 'completed' && detailOrder.google_drive_url && (
+                      <a
+                        href={detailOrder.google_drive_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
+                      >
+                        Google Drive PDF
+                      </a>
+                    )}
+                    {detailOrder.status === 'completed' && detailOrder.product_code !== 'saju-data' && !detailOrder.google_drive_url && (
+                      <a
+                        href={`/api/orders/${detailOrder.id}/pdf`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 text-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg"
+                      >
+                        PDF 보기
+                      </a>
+                    )}
+                    {['failed', 'pending', 'completed', 'analyzing', 'pdf_generating'].includes(detailOrder.status) && (
+                      <button
+                        onClick={() => { handleReanalyze(detailOrder.id); setShowDetailModal(false); }}
+                        disabled={reanalyzingId === detailOrder.id}
+                        className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                      >
+                        <RefreshCw size={12} className={`inline mr-1 ${reanalyzingId === detailOrder.id ? 'animate-spin' : ''}`} />
+                        재분석
+                      </button>
+                    )}
+                  </div>
+                  {detailOrder.status === 'completed' && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setShowDetailModal(false); openTextModal(detailOrder.id); }}
+                        className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg"
+                      >
+                        <FileText size={12} className="inline mr-1" />
+                        텍스트 보기
+                      </button>
+                      <button
+                        onClick={() => downloadText(detailOrder.id)}
+                        className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg"
+                      >
+                        <Download size={12} className="inline mr-1" />
+                        텍스트 다운로드
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -1672,6 +1740,56 @@ export default function OrdersPage() {
                 <p className="text-xs text-gray-400 mt-2">
                   총 {(dataTab === 'summary' ? getResultSummary(dataOrder) : getResultDataLines(dataOrder)).split('\n').length}줄
                 </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== 텍스트 변환 Modal ========== */}
+        {showTextModal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setShowTextModal(false)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">분석 결과 텍스트</h3>
+                  {textOrderInfo && (
+                    <p className="text-xs text-gray-500 mt-0.5">{textOrderInfo.name} - {textOrderInfo.product}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(textContent);
+                      alert('클립보드에 복사되었습니다.');
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg"
+                  >
+                    복사
+                  </button>
+                  <button onClick={() => setShowTextModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6">
+                {textLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <RefreshCw size={24} className="animate-spin text-gray-400" />
+                    <span className="ml-2 text-gray-500">텍스트 변환 중...</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="bg-gray-900 rounded-lg p-4 overflow-auto max-h-[65vh]">
+                      <pre className="text-green-400 text-xs font-mono whitespace-pre-wrap">
+                        {textContent}
+                      </pre>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-2">
+                      총 {textContent.split('\n').length}줄 | 프롬프트에 활용하려면 &quot;복사&quot; 버튼을 눌러 클립보드에 복사하세요.
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
