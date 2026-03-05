@@ -256,7 +256,63 @@ function initializeDb(db: Database.Database) {
       FOREIGN KEY (customer_id_2) REFERENCES customers(id)
     );
     CREATE INDEX IF NOT EXISTS idx_compat_pairs_order ON compatibility_pairs(order_id);
+
+    -- 궁합 그룹 (가족, 커플 등)
+    CREATE TABLE IF NOT EXISTS compatibility_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      group_name TEXT NOT NULL,
+      group_type TEXT DEFAULT 'custom',
+      memo TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    -- 궁합 그룹 멤버
+    CREATE TABLE IF NOT EXISTS compatibility_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER NOT NULL,
+      customer_id INTEGER NOT NULL,
+      relation_label TEXT DEFAULT '',
+      display_order INTEGER DEFAULT 0,
+      FOREIGN KEY (group_id) REFERENCES compatibility_groups(id),
+      FOREIGN KEY (customer_id) REFERENCES customers(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_compat_members_group ON compatibility_members(group_id);
+
+    -- 궁합 분석 결과 (쌍별)
+    CREATE TABLE IF NOT EXISTS compatibility_results (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      group_id INTEGER,
+      customer_id_1 INTEGER NOT NULL,
+      customer_id_2 INTEGER NOT NULL,
+      relation_label TEXT DEFAULT '',
+      score INTEGER DEFAULT 0,
+      grade TEXT DEFAULT '',
+      result_json TEXT DEFAULT '',
+      result_text TEXT DEFAULT '',
+      pdf_url TEXT DEFAULT '',
+      google_drive_url TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (group_id) REFERENCES compatibility_groups(id),
+      FOREIGN KEY (customer_id_1) REFERENCES customers(id),
+      FOREIGN KEY (customer_id_2) REFERENCES customers(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_compat_results_group ON compatibility_results(group_id);
   `);
+
+  // Migration: 추가질문 상태 컬럼
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN question_status TEXT DEFAULT ''`);
+  } catch (e) { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE orders ADD COLUMN answered_at DATETIME`);
+  } catch (e) { /* already exists */ }
 
   // Migration: consultations 테이블 재생성 (NOT NULL/FK 제약 제거)
   // 기존 테이블에 customer_id NOT NULL이 있어 새 레코드 생성 불가 → 재생성
@@ -737,6 +793,188 @@ export function getCompatibilityPairsForOrders(orderIds: number[]) {
     JOIN customers c2 ON cp.customer_id_2 = c2.id
     WHERE cp.order_id IN (${placeholders})
   `).all(...orderIds) as any[];
+}
+
+// ============ 궁합 그룹 관리 ============
+
+/** 궁합 그룹 생성 */
+export function createCompatibilityGroup(userId: number, data: { groupName: string; groupType: string; memo?: string }) {
+  const db = getDb();
+  const result = db.prepare('INSERT INTO compatibility_groups (user_id, group_name, group_type, memo) VALUES (?, ?, ?, ?)').run(
+    userId, data.groupName, data.groupType, data.memo || ''
+  );
+  return result.lastInsertRowid as number;
+}
+
+/** 궁합 그룹 멤버 추가 */
+export function addCompatibilityMember(groupId: number, customerId: number, relationLabel: string, displayOrder: number = 0) {
+  const db = getDb();
+  return db.prepare('INSERT INTO compatibility_members (group_id, customer_id, relation_label, display_order) VALUES (?, ?, ?, ?)')
+    .run(groupId, customerId, relationLabel, displayOrder);
+}
+
+/** 궁합 그룹 멤버 삭제 */
+export function removeCompatibilityMember(memberId: number) {
+  const db = getDb();
+  return db.prepare('DELETE FROM compatibility_members WHERE id = ?').run(memberId);
+}
+
+/** 궁합 그룹 목록 조회 (멤버 포함) */
+export function getCompatibilityGroups(userId: number) {
+  const db = getDb();
+  const groups = db.prepare('SELECT * FROM compatibility_groups WHERE user_id = ? ORDER BY created_at DESC').all(userId) as any[];
+  for (const g of groups) {
+    g.members = db.prepare(`
+      SELECT cm.*, c.name, c.gender, c.birth_date, c.birth_time, c.calendar_type, c.customer_code
+      FROM compatibility_members cm
+      JOIN customers c ON cm.customer_id = c.id
+      WHERE cm.group_id = ?
+      ORDER BY cm.display_order ASC
+    `).all(g.id);
+    g.results = db.prepare(`
+      SELECT cr.*, c1.name as person1_name, c1.customer_code as person1_code,
+        c2.name as person2_name, c2.customer_code as person2_code
+      FROM compatibility_results cr
+      JOIN customers c1 ON cr.customer_id_1 = c1.id
+      JOIN customers c2 ON cr.customer_id_2 = c2.id
+      WHERE cr.group_id = ? AND cr.user_id = ?
+      ORDER BY cr.created_at ASC
+    `).all(g.id, userId);
+  }
+  return groups;
+}
+
+/** 1:1 궁합 결과 조회 (그룹 없는 것) */
+export function getStandaloneCompatibilityResults(userId: number) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT cr.*, c1.name as person1_name, c1.customer_code as person1_code,
+      c1.gender as person1_gender, c1.birth_date as person1_birth_date,
+      c2.name as person2_name, c2.customer_code as person2_code,
+      c2.gender as person2_gender, c2.birth_date as person2_birth_date
+    FROM compatibility_results cr
+    JOIN customers c1 ON cr.customer_id_1 = c1.id
+    JOIN customers c2 ON cr.customer_id_2 = c2.id
+    WHERE cr.user_id = ? AND cr.group_id IS NULL
+    ORDER BY cr.created_at DESC
+  `).all(userId) as any[];
+}
+
+/** 궁합 결과 생성 */
+export function createCompatibilityResult(userId: number, data: {
+  groupId?: number; customerId1: number; customerId2: number; relationLabel?: string;
+}) {
+  const db = getDb();
+  const result = db.prepare(
+    'INSERT INTO compatibility_results (user_id, group_id, customer_id_1, customer_id_2, relation_label) VALUES (?, ?, ?, ?, ?)'
+  ).run(userId, data.groupId || null, data.customerId1, data.customerId2, data.relationLabel || '');
+  return result.lastInsertRowid as number;
+}
+
+/** 궁합 결과 업데이트 */
+export function updateCompatibilityResult(id: number, userId: number, data: {
+  score?: number; grade?: string; resultJson?: string; resultText?: string;
+  pdfUrl?: string; googleDriveUrl?: string; status?: string;
+}) {
+  const db = getDb();
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (data.score !== undefined) { sets.push('score = ?'); vals.push(data.score); }
+  if (data.grade !== undefined) { sets.push('grade = ?'); vals.push(data.grade); }
+  if (data.resultJson !== undefined) { sets.push('result_json = ?'); vals.push(data.resultJson); }
+  if (data.resultText !== undefined) { sets.push('result_text = ?'); vals.push(data.resultText); }
+  if (data.pdfUrl !== undefined) { sets.push('pdf_url = ?'); vals.push(data.pdfUrl); }
+  if (data.googleDriveUrl !== undefined) { sets.push('google_drive_url = ?'); vals.push(data.googleDriveUrl); }
+  if (data.status !== undefined) { sets.push('status = ?'); vals.push(data.status); }
+  sets.push('updated_at = CURRENT_TIMESTAMP');
+  vals.push(id, userId);
+  return db.prepare(`UPDATE compatibility_results SET ${sets.join(', ')} WHERE id = ? AND user_id = ?`).run(...vals);
+}
+
+/** 궁합 결과 조회 (단건) */
+export function getCompatibilityResultById(id: number, userId: number) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT cr.*, c1.name as person1_name, c1.gender as person1_gender,
+      c1.birth_date as person1_birth_date, c1.birth_time as person1_birth_time,
+      c1.calendar_type as person1_calendar_type, c1.customer_code as person1_code,
+      c2.name as person2_name, c2.gender as person2_gender,
+      c2.birth_date as person2_birth_date, c2.birth_time as person2_birth_time,
+      c2.calendar_type as person2_calendar_type, c2.customer_code as person2_code
+    FROM compatibility_results cr
+    JOIN customers c1 ON cr.customer_id_1 = c1.id
+    JOIN customers c2 ON cr.customer_id_2 = c2.id
+    WHERE cr.id = ? AND cr.user_id = ?
+  `).get(id, userId) as any | undefined;
+}
+
+/** 그룹의 모든 쌍 자동 생성 */
+export function generateGroupPairs(userId: number, groupId: number) {
+  const db = getDb();
+  const members = db.prepare(`
+    SELECT cm.*, c.name FROM compatibility_members cm
+    JOIN customers c ON cm.customer_id = c.id
+    WHERE cm.group_id = ?
+    ORDER BY cm.display_order ASC
+  `).all(groupId) as any[];
+
+  const newResults: number[] = [];
+  for (let i = 0; i < members.length; i++) {
+    for (let j = i + 1; j < members.length; j++) {
+      // 이미 존재하는지 확인
+      const existing = db.prepare(
+        'SELECT id FROM compatibility_results WHERE group_id = ? AND customer_id_1 = ? AND customer_id_2 = ? AND user_id = ?'
+      ).get(groupId, members[i].customer_id, members[j].customer_id, userId);
+      if (!existing) {
+        const relLabel = members[i].relation_label && members[j].relation_label
+          ? `${members[i].relation_label}-${members[j].relation_label}` : '';
+        const id = createCompatibilityResult(userId, {
+          groupId, customerId1: members[i].customer_id, customerId2: members[j].customer_id, relationLabel: relLabel,
+        });
+        newResults.push(id as number);
+      }
+    }
+  }
+  return newResults;
+}
+
+/** 궁합 그룹 삭제 */
+export function deleteCompatibilityGroup(groupId: number, userId: number) {
+  const db = getDb();
+  db.prepare('DELETE FROM compatibility_results WHERE group_id = ? AND user_id = ?').run(groupId, userId);
+  db.prepare('DELETE FROM compatibility_members WHERE group_id = ?').run(groupId);
+  db.prepare('DELETE FROM compatibility_groups WHERE id = ? AND user_id = ?').run(groupId, userId);
+}
+
+// ============ 추가 질문 관리 ============
+
+/** 추가질문이 있는 주문 목록 */
+export function getOrdersWithQuestions(userId: number, filter?: string) {
+  const db = getDb();
+  let sql = `
+    SELECT o.id, o.extra_question, o.extra_answer, o.question_status, o.answered_at,
+      o.product_id, o.status as order_status, o.created_at, o.updated_at,
+      c.name as customer_name, c.customer_code, c.gender as customer_gender,
+      c.birth_date as customer_birth_date,
+      p.name as product_name, p.code as product_code
+    FROM orders o
+    JOIN customers c ON o.customer_id = c.id
+    JOIN products p ON o.product_id = p.id
+    WHERE o.user_id = ? AND (o.extra_question IS NOT NULL AND o.extra_question != '')
+  `;
+  if (filter === 'pending') sql += ` AND (o.question_status = '' OR o.question_status = 'pending' OR o.question_status IS NULL)`;
+  if (filter === 'answered') sql += ` AND o.question_status = 'answered'`;
+  sql += ` ORDER BY CASE WHEN o.question_status = 'answered' THEN 1 ELSE 0 END ASC, o.created_at DESC`;
+  return db.prepare(sql).all(userId) as any[];
+}
+
+/** 답변 저장 */
+export function saveQuestionAnswer(orderId: number, userId: number, answer: string) {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE orders SET extra_answer = ?, question_status = 'answered', answered_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND user_id = ?
+  `).run(answer, orderId, userId);
 }
 
 // ============ 상품 ============

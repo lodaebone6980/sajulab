@@ -22,6 +22,9 @@ import {
   Link2,
   PanelLeftClose,
   Flame,
+  Heart,
+  HelpCircle,
+  BarChart3,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -52,7 +55,9 @@ export default function Sidebar({ user }: SidebarProps) {
   const menuItems: MenuItem[] = [
     { icon: Bell, label: '공지사항', href: '/notices', badges: ['NEW'], bgStyle: 'pink' },
     { icon: LayoutDashboard, label: '대시보드', href: '/dashboard', bgStyle: 'none' },
-    { icon: ShoppingCart, label: '주문 관리', href: '/orders', bgStyle: 'none' },
+    { icon: BarChart3, label: '분석 주문 관리', href: '/orders', bgStyle: 'none' },
+    { icon: Heart, label: '궁합 주문 관리', href: '/compatibility', badges: ['NEW'], bgStyle: 'pink' },
+    { icon: HelpCircle, label: '추가 질문 관리', href: '/questions', badges: ['NEW'], bgStyle: 'purple' },
     { icon: Users, label: '고객 관리', href: '/customers', bgStyle: 'none' },
     { icon: MessageSquare, label: '상담 기록', href: '/consultations', bgStyle: 'none' },
     { icon: MessageCircle, label: '상담 V3', href: '/consultations-v3', badges: ['NEW'], bgStyle: 'purple' },
