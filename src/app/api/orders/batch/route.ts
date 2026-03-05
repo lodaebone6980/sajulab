@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, updateOrderDriveInfo, saveFortuneData, saveNarrative, getPdfDir, getDb } from '@/lib/db/index';
-import { uploadPdfToDrive, isDriveConfigured } from '@/lib/google-drive';
+import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, saveFortuneData, saveNarrative, getPdfDir, getDb } from '@/lib/db/index';
+import { uploadPdfToUserDrive } from '@/lib/google-drive/upload-helper';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
 import { generateSajuPdf } from '@/lib/pdf/generator';
@@ -130,17 +130,13 @@ async function processOneOrder(orderId: number, userId: number) {
 
     updateOrderProgress(orderId, userId, 95, 'PDF 저장 완료');
 
-    // Google Drive 업로드
-    if (isDriveConfigured()) {
-      try {
-        updateOrderProgress(orderId, userId, 97, 'Google Drive 업로드중');
-        const fileName = `${order.customer_name}_${order.product_code}_${orderId}.pdf`;
-        const driveResult = await uploadPdfToDrive(pdfBuffer, fileName);
-        updateOrderDriveInfo(orderId, userId, driveResult.fileId, driveResult.webViewLink);
-        console.log(`[Drive] ✅ Order ${orderId} uploaded: ${driveResult.webViewLink}`);
-      } catch (driveErr) {
-        console.error(`[Drive] ❌ Upload failed for order ${orderId}:`, driveErr);
-      }
+    // Google Drive 업로드 (사용자 OAuth 토큰 사용)
+    try {
+      updateOrderProgress(orderId, userId, 97, 'Google Drive 업로드중');
+      const fileName = `${order.customer_name}_${order.product_code}_${orderId}.pdf`;
+      await uploadPdfToUserDrive(pdfBuffer, fileName, userId, orderId);
+    } catch (driveErr) {
+      console.error(`[Drive] ❌ Upload failed for order ${orderId}:`, driveErr);
     }
 
     updateOrderProgress(orderId, userId, 99, '처리 완료');

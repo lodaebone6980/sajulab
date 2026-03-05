@@ -1,58 +1,105 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { isDriveConfigured, uploadPdfToDrive } from '@/lib/google-drive';
-import { google } from 'googleapis';
+import { isOAuthConfigured, uploadPdfToDriveOAuth, refreshAccessToken } from '@/lib/google-drive';
+import { getUserGoogleTokens, updateUserGoogleTokens, clearUserGoogleTokens } from '@/lib/db';
 
+// GET: Drive 연결 상태 확인
 export async function GET(request: NextRequest) {
   const auth = requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
-  // Drive 설정 상태 반환
+  const oauthConfigured = isOAuthConfigured();
+  const tokens = getUserGoogleTokens(auth.userId);
+  const userConnected = !!(tokens?.google_refresh_token);
+
   return NextResponse.json({
-    configured: isDriveConfigured(),
-    serviceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
-    folderId: process.env.GOOGLE_DRIVE_FOLDER_ID || '',
+    oauthConfigured,
+    configured: userConnected,
+    driveEmail: tokens?.google_drive_email || '',
+    folderId: tokens?.google_drive_folder_id || '',
   });
 }
 
+// POST: Drive 연결 테스트
 export async function POST(request: NextRequest) {
   const auth = requireAuth(request);
   if (auth instanceof NextResponse) return auth;
 
-  if (!isDriveConfigured()) {
+  const tokens = getUserGoogleTokens(auth.userId);
+  if (!tokens?.google_refresh_token) {
     return NextResponse.json(
-      { error: 'Google Drive 환경변수가 설정되지 않았습니다.' },
+      { error: 'Google Drive가 연결되지 않았습니다. 먼저 연결해주세요.' },
       { status: 400 }
     );
   }
 
   try {
-    // 테스트 PDF 업로드
-    const testContent = Buffer.from('%PDF-1.4 test file from sajulab drive integration test');
-    const result = await uploadPdfToDrive(testContent, `sajulab_test_${Date.now()}.pdf`);
+    // 토큰 갱신
+    let accessToken = tokens.google_access_token;
+    const isExpired = !tokens.google_token_expiry || new Date(tokens.google_token_expiry) < new Date();
 
-    // 테스트 파일 삭제
-    try {
-      const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-      const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-      const jwtAuth = new google.auth.JWT({ email, key, scopes: ['https://www.googleapis.com/auth/drive.file'] });
-      const drive = google.drive({ version: 'v3', auth: jwtAuth });
-      await drive.files.delete({ fileId: result.fileId });
-    } catch {
-      // 삭제 실패해도 테스트 자체는 성공
+    if (isExpired) {
+      const refreshed = await refreshAccessToken(tokens.google_refresh_token);
+      accessToken = refreshed.access_token;
+      updateUserGoogleTokens(auth.userId, {
+        refresh_token: tokens.google_refresh_token,
+        access_token: refreshed.access_token,
+        token_expiry: refreshed.expiry_date,
+        drive_email: tokens.google_drive_email,
+      });
     }
+
+    // 테스트 파일 업로드
+    const testContent = Buffer.from('%PDF-1.4 sajulab drive test file');
+    const result = await uploadPdfToDriveOAuth(
+      testContent,
+      `sajulab_test_${Date.now()}.pdf`,
+      accessToken,
+      tokens.google_refresh_token,
+      tokens.google_drive_folder_id || undefined
+    );
+
+    // 테스트 파일 삭제 시도
+    try {
+      const { google: gapis } = require('googleapis');
+      const { OAuth2 } = gapis.auth;
+      const oauth2Client = new OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+      oauth2Client.setCredentials({
+        access_token: accessToken,
+        refresh_token: tokens.google_refresh_token,
+      });
+      const drive = gapis.drive({ version: 'v3', auth: oauth2Client });
+      await drive.files.delete({ fileId: result.fileId });
+    } catch { /* 삭제 실패해도 테스트 성공 */ }
 
     return NextResponse.json({
       success: true,
-      message: 'Google Drive 연동 테스트 성공!',
-      fileId: result.fileId,
-      webViewLink: result.webViewLink,
+      message: 'Google Drive 연동 테스트 성공! PDF 업로드가 정상 작동합니다.',
     });
   } catch (error: any) {
     console.error('[Drive Test] Error:', error);
+
+    // refresh token 만료 시 재연결 필요
+    if (error.message?.includes('invalid_grant') || error.code === 401) {
+      clearUserGoogleTokens(auth.userId);
+      return NextResponse.json(
+        { error: 'Google Drive 인증이 만료되었습니다. 다시 연결해주세요.', needReconnect: true },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: `연동 테스트 실패: ${error.message}` },
       { status: 500 }
     );
   }
+}
+
+// DELETE: Drive 연결 해제
+export async function DELETE(request: NextRequest) {
+  const auth = requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  clearUserGoogleTokens(auth.userId);
+  return NextResponse.json({ message: 'Google Drive 연결이 해제되었습니다.' });
 }

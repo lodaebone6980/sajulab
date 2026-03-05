@@ -249,6 +249,23 @@ function initializeDb(db: Database.Database) {
     db.exec(`ALTER TABLE orders ADD COLUMN google_drive_url TEXT DEFAULT ''`);
   } catch { /* already exists */ }
 
+  // Migration: 사용자별 Google OAuth 토큰 컬럼 추가
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN google_refresh_token TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN google_access_token TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN google_token_expiry TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN google_drive_email TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN google_drive_folder_id TEXT DEFAULT ''`);
+  } catch { /* already exists */ }
+
   // Auto-seed admin user if no users exist
   const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
   if (userCount.count === 0) {
@@ -308,6 +325,56 @@ export function getUserById(id: number) {
 export function updateUserPoints(userId: number, points: number) {
   const db = getDb();
   db.prepare('UPDATE users SET points = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(points, userId);
+}
+
+// ============ Google OAuth 토큰 관리 ============
+export function updateUserGoogleTokens(userId: number, data: {
+  refresh_token: string;
+  access_token: string;
+  token_expiry: string;
+  drive_email: string;
+}) {
+  const db = getDb();
+  db.prepare(`
+    UPDATE users SET
+      google_refresh_token = ?,
+      google_access_token = ?,
+      google_token_expiry = ?,
+      google_drive_email = ?,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(data.refresh_token, data.access_token, data.token_expiry, data.drive_email, userId);
+}
+
+export function getUserGoogleTokens(userId: number) {
+  const db = getDb();
+  const row = db.prepare(`
+    SELECT google_refresh_token, google_access_token, google_token_expiry, google_drive_email, google_drive_folder_id
+    FROM users WHERE id = ?
+  `).get(userId) as {
+    google_refresh_token: string;
+    google_access_token: string;
+    google_token_expiry: string;
+    google_drive_email: string;
+    google_drive_folder_id: string;
+  } | undefined;
+  return row;
+}
+
+export function updateUserDriveFolderId(userId: number, folderId: string) {
+  const db = getDb();
+  db.prepare('UPDATE users SET google_drive_folder_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(folderId, userId);
+}
+
+export function clearUserGoogleTokens(userId: number) {
+  const db = getDb();
+  db.prepare(`
+    UPDATE users SET
+      google_refresh_token = '', google_access_token = '',
+      google_token_expiry = '', google_drive_email = '',
+      updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(userId);
 }
 
 // ============ 고객 ============
