@@ -873,81 +873,152 @@ export default function OrdersPage() {
             </div>
           </div>
 
-          {/* ========== 그룹뷰 ========== */}
+          {/* ========== 그룹뷰 (고객관리 스타일 배지) ========== */}
           {viewMode === 'group' && customerGroups.length > 0 && (
-            <div className="space-y-3">
-              {customerGroups.map(group => {
-                const isExpanded = expandedGroups.has(group.customer_id);
-                return (
-                  <div key={group.customer_id} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                    {/* 고객 헤더 */}
-                    <div
-                      onClick={() => toggleGroup(group.customer_id)}
-                      className="flex items-center gap-3 px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
-                    >
-                      {isExpanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-                      <span className="font-bold text-gray-900">{group.customer_name}</span>
-                      {group.customer_code && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-mono">{group.customer_code}</span>
-                      )}
-                      {group.customer_nickname && (
-                        <span className="text-xs text-gray-500">({group.customer_nickname})</span>
-                      )}
-                      <span className={`text-xs px-1.5 py-0.5 rounded ${group.customer_gender === 'male' ? 'bg-blue-50 text-blue-600' : 'bg-pink-50 text-pink-600'}`}>
-                        {group.customer_gender === 'male' ? '남' : '여'}
-                      </span>
-                      <span className="text-xs text-gray-500">{group.customer_birth_date}</span>
-                      <span className="ml-auto text-xs text-gray-400">{group.orders.length}건</span>
-                    </div>
-                    {/* 주문 목록 */}
-                    {isExpanded && (
-                      <div className="divide-y divide-gray-100">
-                        {group.orders.map((order: any) => (
-                          <div key={order.id} className="flex items-center gap-3 px-6 py-2.5 hover:bg-gray-50 transition-colors text-sm">
-                            <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded font-mono min-w-[80px]">{order.order_code || `#${order.id}`}</span>
-                            <span className="text-gray-900 min-w-[100px]">{order.product_name}</span>
-                            {order.partner_name && (
-                              <span className="text-xs bg-red-50 text-red-600 px-1.5 py-0.5 rounded">
-                                ❤ {order.partner_name}
-                              </span>
-                            )}
-                            <span>{getStatusBadge(order.status, order.progress, order.progress_message)}</span>
-                            {order.consultation_date && (
-                              <span className="text-xs text-gray-400">상담: {order.consultation_date}</span>
-                            )}
-                            <span className="text-xs text-gray-400 ml-auto">{formatDate(order.created_at)}</span>
-                            <div className="flex items-center gap-1">
-                              {order.status === 'completed' && order.pdf_url && (
-                                <a href={order.pdf_url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-green-600 hover:bg-green-50 rounded">
-                                  <Download size={14} />
-                                </a>
-                              )}
-                              {order.google_drive_url && (
-                                <a href={order.google_drive_url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Google Drive">
-                                  <FileText size={14} />
-                                </a>
-                              )}
-                              <button onClick={() => { setDetailOrder(order); setShowDetailModal(true); }} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
-                                <Eye size={14} />
-                              </button>
-                              {order.result_json && (
-                                <button onClick={() => { setDataOrder(order); setShowDataModal(true); setDataTab('summary'); }} className="p-1.5 text-purple-500 hover:bg-purple-50 rounded">
-                                  <Database size={14} />
-                                </button>
-                              )}
-                              {(order.status === 'pending' || order.status === 'failed') && (
-                                <button onClick={() => handleReanalyze(order.id)} disabled={reanalyzingId === order.id} className="p-1.5 text-orange-500 hover:bg-orange-50 rounded disabled:opacity-50">
-                                  <Play size={14} />
-                                </button>
-                              )}
-                            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50/50">
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">고객코드</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">이름</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">닉네임</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">성별</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">생년월일</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">음양</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 min-w-[280px]">분석항목</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">액션</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customerGroups.map(group => {
+                    // 상품별 주문 그룹핑
+                    const productMap = new Map<string, { orders: any[]; productName: string; productCode: string }>();
+                    for (const order of group.orders) {
+                      const key = order.product_code;
+                      if (!productMap.has(key)) {
+                        productMap.set(key, { orders: [], productName: order.product_name, productCode: order.product_code });
+                      }
+                      productMap.get(key)!.orders.push(order);
+                    }
+
+                    const productColorMap: Record<string, string> = {
+                      'saju-data': 'bg-gray-500',
+                      'saju-basic': 'bg-blue-500',
+                      'saju-premium': 'bg-purple-500',
+                      'saju-newyear': 'bg-amber-500',
+                      'saju-love': 'bg-red-500',
+                    };
+
+                    const getCalendarLabel = (t: string) => t === 'lunar' ? '음력' : t === 'leap' ? '윤달' : '양력';
+
+                    // 진행 중인 주문 있는지
+                    const activeStatuses = ['requested', 'extracting', 'analyzing', 'pdf_generating', 'processing'];
+                    const hasActiveOrder = group.orders.some((o: any) => activeStatuses.includes(o.status));
+                    // pending 주문
+                    const hasPendingOrder = group.orders.some((o: any) => o.status === 'pending');
+                    // failed 주문
+                    const hasFailedOrder = group.orders.some((o: any) => o.status === 'failed');
+
+                    return (
+                      <tr key={group.customer_id} className="border-b border-gray-50 hover:bg-gray-50/50 align-top">
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                            {group.customer_code || '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{group.customer_name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-500">{group.customer_nickname || '-'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold ${group.customer_gender === 'male' ? 'bg-blue-100 text-blue-700' : 'bg-pink-100 text-pink-700'}`}>
+                            {group.customer_gender === 'male' ? '남' : '여'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{group.customer_birth_date || '-'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{getCalendarLabel(group.customer_calendar_type)}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap gap-1.5">
+                            {Array.from(productMap.entries()).map(([code, info]) => {
+                              const bgColor = productColorMap[code] || 'bg-gray-400';
+                              const allCompleted = info.orders.every((o: any) => o.status === 'completed');
+                              const anyActive = info.orders.some((o: any) => activeStatuses.includes(o.status));
+                              const anyFailed = info.orders.some((o: any) => o.status === 'failed');
+                              const anyPending = info.orders.some((o: any) => o.status === 'pending');
+
+                              // 상태에 따라 배지 스타일 결정
+                              let statusIndicator = '';
+                              let badgeStyle = `${bgColor} text-white`;
+                              if (anyActive) {
+                                badgeStyle = `${bgColor} text-white animate-pulse`;
+                                statusIndicator = ' ⟳';
+                              } else if (anyFailed) {
+                                badgeStyle = 'bg-red-100 text-red-700 border border-red-300';
+                                statusIndicator = ' ✗';
+                              } else if (anyPending) {
+                                badgeStyle = 'bg-gray-100 text-gray-600 border border-gray-300';
+                                statusIndicator = ' ○';
+                              } else if (allCompleted) {
+                                badgeStyle = `${bgColor} text-white`;
+                                statusIndicator = '';
+                              }
+
+                              // 궁합인 경우 파트너명 포함
+                              const loveOrder = code === 'saju-love' ? info.orders.find((o: any) => o.partner_name) : null;
+                              const partnerLabel = loveOrder ? ` (${loveOrder.partner_name}과)` : '';
+
+                              return (
+                                <span
+                                  key={code}
+                                  className={`px-2 py-0.5 text-xs rounded cursor-pointer hover:opacity-80 ${badgeStyle}`}
+                                  title={`${info.productName}${partnerLabel} - ${info.orders.length}건${anyActive ? ' (처리중)' : anyFailed ? ' (실패)' : anyPending ? ' (대기)' : ' (완료)'}`}
+                                  onClick={() => {
+                                    // 클릭하면 해당 주문 상세보기 (첫번째 주문)
+                                    const firstOrder = info.orders[0];
+                                    if (firstOrder) openDetailModal(firstOrder);
+                                  }}
+                                >
+                                  {info.productName}{info.orders.length > 1 ? ` (${info.orders.length})` : ''}{statusIndicator}{partnerLabel}
+                                </span>
+                              );
+                            })}
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            {/* 완료된 PDF 다운로드 */}
+                            {group.orders.filter((o: any) => o.status === 'completed' && o.pdf_url).length > 0 && (
+                              <div className="relative group/dl">
+                                <button className="p-1.5 text-green-600 hover:bg-green-50 rounded">
+                                  <Download size={14} />
+                                </button>
+                                <div className="hidden group-hover/dl:block absolute right-0 top-full z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
+                                  {group.orders.filter((o: any) => o.status === 'completed' && o.pdf_url).map((o: any) => (
+                                    <a key={o.id} href={o.pdf_url} target="_blank" rel="noopener noreferrer" className="block px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">
+                                      {o.product_name}
+                                    </a>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            {/* 대기/실패 주문 일괄 분석 시작 */}
+                            {(hasPendingOrder || hasFailedOrder) && (
+                              <button
+                                onClick={() => {
+                                  const targets = group.orders.filter((o: any) => o.status === 'pending' || o.status === 'failed');
+                                  targets.forEach((o: any) => handleReanalyze(o.id));
+                                }}
+                                className="p-1.5 text-orange-500 hover:bg-orange-50 rounded"
+                                title="대기/실패 주문 분석 시작"
+                              >
+                                <Play size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
 
