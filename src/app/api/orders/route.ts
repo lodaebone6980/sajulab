@@ -17,6 +17,8 @@ import {
   getOrdersGrouped,
   getCustomerById,
   updateCustomerNickname,
+  createCompatibilityPair,
+  getCompatibilityPairsForOrders,
 } from '@/lib/db/index';
 import { uploadPdfToUserDrive } from '@/lib/google-drive/upload-helper';
 import { analyzeSajuWithFortune } from '@/lib/saju';
@@ -56,6 +58,19 @@ export async function GET(request: NextRequest) {
         toDate: toDate || undefined,
       });
       const totalOrders = groups.reduce((sum: number, g: any) => sum + g.orders.length, 0);
+      // 궁합 페어링 정보 추가
+      const allOrderIds = groups.flatMap((g: any) => g.orders.map((o: any) => o.id));
+      const pairs = getCompatibilityPairsForOrders(allOrderIds);
+      const pairMap = new Map(pairs.map((p: any) => [p.order_id, p]));
+      for (const g of groups) {
+        for (const o of g.orders) {
+          const pair = pairMap.get(o.id);
+          if (pair) {
+            o.partner_name = pair.partner_name;
+            o.partner_code = pair.partner_code;
+          }
+        }
+      }
       return NextResponse.json({ customer_groups: groups, total: totalOrders });
     }
 
@@ -179,6 +194,13 @@ export async function POST(request: NextRequest) {
       orderTime = '',
       consultationDate = '',
       customerId: providedCustomerId,
+      // 궁합 대상 (saju-love)
+      person2Name,
+      person2Gender,
+      person2BirthDate,
+      person2BirthTime,
+      person2CalendarType,
+      person2CustomerId: providedPerson2Id,
     } = body;
 
     // Validate required fields
@@ -248,6 +270,35 @@ export async function POST(request: NextRequest) {
 
     const orderId = orderResult.lastInsertRowid as number;
     assignOrderCode(orderId);
+
+    // 궁합 페어링: saju-love 상품이고 person2 정보가 있으면
+    let person2Id: number | null = null;
+    if (product.code === 'saju-love' && person2Name && person2BirthDate && person2Gender) {
+      if (providedPerson2Id) {
+        const existing2 = getCustomerById(providedPerson2Id, userId);
+        if (existing2) person2Id = providedPerson2Id;
+      }
+      if (!person2Id) {
+        const matched2 = findCustomerByNameAndBirth(userId, person2Name, person2BirthDate);
+        if (matched2) {
+          person2Id = matched2.id;
+        } else {
+          const cust2Result = createCustomer(userId, {
+            name: person2Name,
+            gender: person2Gender,
+            birth_date: person2BirthDate,
+            birth_time: person2BirthTime || '',
+            calendar_type: person2CalendarType || 'solar',
+            phone: '',
+            email: '',
+            memo: '',
+          });
+          person2Id = cust2Result.lastInsertRowid as number;
+          assignCustomerCode(person2Id);
+        }
+      }
+      createCompatibilityPair(orderId, customerId, person2Id);
+    }
 
     // Mark as requested immediately
     updateOrderStatus(orderId, userId, 'requested');

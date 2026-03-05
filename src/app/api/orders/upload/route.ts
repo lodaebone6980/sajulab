@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { createOrder, createCustomer, getProducts, updateOrderStatus, updateOrderProgress, findCustomerByNameAndBirth, assignCustomerCode, assignOrderCode, updateCustomerNickname } from '@/lib/db/index';
+import { createOrder, createCustomer, getProducts, updateOrderStatus, updateOrderProgress, findCustomerByNameAndBirth, assignCustomerCode, assignOrderCode, updateCustomerNickname, createCompatibilityPair } from '@/lib/db/index';
 
 // 간지시간 → 시각 매핑
 const GANJI_TO_TIME: Record<string, string> = {
@@ -105,6 +105,23 @@ export async function POST(request: NextRequest) {
 
     const results: Array<{ row: number; success: boolean; orderId?: number; error?: string; name?: string }> = [];
 
+    // 궁합(saju-love) 페어링: 닉네임으로 그룹핑
+    const isLoveProduct = product.code === 'saju-love';
+    // 닉네임별 행 인덱스 매핑 (궁합 페어링용)
+    const nicknameGroups = new Map<string, number[]>();
+    if (isLoveProduct) {
+      for (let i = 0; i < rows.length; i++) {
+        const nick = String(rows[i]['닉네임'] || '').trim();
+        if (nick) {
+          if (!nicknameGroups.has(nick)) nicknameGroups.set(nick, []);
+          nicknameGroups.get(nick)!.push(i);
+        }
+      }
+    }
+
+    // 행 인덱스 → {customerId, orderId} 매핑 (궁합 연결용)
+    const rowResults = new Map<number, { customerId: number; orderId: number }>();
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       try {
@@ -127,6 +144,9 @@ export async function POST(request: NextRequest) {
         const consultationDate = parseExcelDate(row['상담날짜']);
 
         const nicknameVal = String(row['닉네임'] || '').trim();
+
+        // 궁합대상 컬럼 확인 (명시적 궁합 대상 이름)
+        const partnerName = String(row['궁합대상'] || '').trim();
 
         // 고객 재사용: 이름+생년월일로 검색
         let customerId: number;
@@ -170,9 +190,28 @@ export async function POST(request: NextRequest) {
         assignOrderCode(orderId);
         updateOrderStatus(orderId, userId, 'pending');
 
+        rowResults.set(i, { customerId, orderId });
         results.push({ row: i + 1, success: true, orderId, name });
       } catch (err: any) {
         results.push({ row: i + 1, success: false, error: err.message, name: row['이름'] });
+      }
+    }
+
+    // 궁합 페어링 처리: 같은 닉네임의 2행을 페어링
+    if (isLoveProduct) {
+      for (const [nick, indices] of nicknameGroups) {
+        if (indices.length === 2) {
+          const r0 = rowResults.get(indices[0]);
+          const r1 = rowResults.get(indices[1]);
+          if (r0 && r1) {
+            try {
+              // 첫 번째 행의 주문에 두 사람 연결
+              createCompatibilityPair(r0.orderId, r0.customerId, r1.customerId);
+            } catch (e) {
+              console.error(`[Upload] 궁합 페어링 실패 (${nick}):`, e);
+            }
+          }
+        }
       }
     }
 

@@ -92,6 +92,18 @@ export default function OrdersPage() {
   const [formAccount, setFormAccount] = useState('');
   const [formExtraQuestion, setFormExtraQuestion] = useState('');
 
+  // 궁합 대상 (person2)
+  const [formPerson2Name, setFormPerson2Name] = useState('');
+  const [formPerson2Gender, setFormPerson2Gender] = useState('female');
+  const [formPerson2BirthDate, setFormPerson2BirthDate] = useState('');
+  const [formPerson2BirthTime, setFormPerson2BirthTime] = useState('');
+  const [formPerson2CalendarType, setFormPerson2CalendarType] = useState('solar');
+  const [formPerson2BirthTimeGanji, setFormPerson2BirthTimeGanji] = useState('');
+  const [reusedPerson2Id, setReusedPerson2Id] = useState<number | null>(null);
+  const [showLoadPerson2Modal, setShowLoadPerson2Modal] = useState(false);
+  const [loadPerson2Search, setLoadPerson2Search] = useState('');
+  const [loadPerson2List, setLoadPerson2List] = useState<any[]>([]);
+
   // 그룹뷰
   const [viewMode, setViewMode] = useState<'group' | 'list'>('group');
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
@@ -420,6 +432,33 @@ export default function OrdersPage() {
     setShowLoadCustomerModal(false);
   };
 
+  // 궁합 대상 불러오기
+  const fetchPerson2ForLoad = async (q: string) => {
+    try {
+      const res = await fetch(`/api/customers?search=${encodeURIComponent(q)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLoadPerson2List(data.customers || []);
+      }
+    } catch {}
+  };
+  const loadPerson2Data = (cus: any) => {
+    setFormPerson2Name(cus.name || '');
+    setFormPerson2Gender(cus.gender || 'female');
+    setFormPerson2BirthDate(cus.birth_date || '');
+    setFormPerson2BirthTime(cus.birth_time || '');
+    setFormPerson2CalendarType(cus.calendar_type || 'solar');
+    setReusedPerson2Id(cus.id);
+    setShowLoadPerson2Modal(false);
+  };
+
+  // 선택된 상품이 궁합인지 확인
+  const isLoveProduct = (() => {
+    if (!formProductId) return false;
+    const p = products.find(pr => pr.id === parseInt(formProductId));
+    return p?.code === 'saju-love';
+  })();
+
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName || !formBirthDate || !formProductId) {
@@ -457,6 +496,15 @@ export default function OrdersPage() {
           account: formAccount,
           extraQuestion: formExtraQuestion,
           ...(reusedCustomerId ? { customerId: reusedCustomerId } : {}),
+          // 궁합 대상
+          ...(isLoveProduct && formPerson2Name ? {
+            person2Name: formPerson2Name,
+            person2Gender: formPerson2Gender,
+            person2BirthDate: parseBirthDateInput(formPerson2BirthDate),
+            person2BirthTime: formPerson2BirthTime ? parseBirthTimeInput(formPerson2BirthTime) : (formPerson2BirthTimeGanji ? parseBirthTimeInput(formPerson2BirthTimeGanji) : ''),
+            person2CalendarType: formPerson2CalendarType,
+            ...(reusedPerson2Id ? { person2CustomerId: reusedPerson2Id } : {}),
+          } : {}),
         }),
       });
 
@@ -472,6 +520,9 @@ export default function OrdersPage() {
       setFormExtraAnswer(''); setFormInternalMemo('');
       setFormNickname(''); setFormCode2(''); setFormAccount(''); setFormExtraQuestion('');
       setReusedCustomerId(null);
+      setFormPerson2Name(''); setFormPerson2Gender('female'); setFormPerson2BirthDate('');
+      setFormPerson2BirthTime(''); setFormPerson2CalendarType('solar');
+      setFormPerson2BirthTimeGanji(''); setReusedPerson2Id(null);
       setShowRegModal(false);
       fetchOrders();
     } catch (err: any) {
@@ -855,6 +906,11 @@ export default function OrdersPage() {
                           <div key={order.id} className="flex items-center gap-3 px-6 py-2.5 hover:bg-gray-50 transition-colors text-sm">
                             <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded font-mono min-w-[80px]">{order.order_code || `#${order.id}`}</span>
                             <span className="text-gray-900 min-w-[100px]">{order.product_name}</span>
+                            {order.partner_name && (
+                              <span className="text-xs bg-red-50 text-red-600 px-1.5 py-0.5 rounded">
+                                ❤ {order.partner_name}
+                              </span>
+                            )}
                             <span>{getStatusBadge(order.status, order.progress, order.progress_message)}</span>
                             {order.consultation_date && (
                               <span className="text-xs text-gray-400">상담: {order.consultation_date}</span>
@@ -1239,6 +1295,65 @@ export default function OrdersPage() {
                         ))}
                       </select>
                     </div>
+
+                    {/* 궁합 대상 (saju-love 선택 시) */}
+                    {isLoveProduct && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h5 className="text-sm font-bold text-red-700">궁합 대상 정보</h5>
+                          <button
+                            type="button"
+                            onClick={() => { setShowLoadPerson2Modal(true); setLoadPerson2Search(''); setLoadPerson2List([]); }}
+                            className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 flex items-center gap-1"
+                          >
+                            <UserPlus size={12} /> 기존 고객 불러오기
+                          </button>
+                        </div>
+                        {reusedPerson2Id && (
+                          <p className="text-xs text-red-500">기존 고객 #{reusedPerson2Id} 불러옴</p>
+                        )}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-red-600 mb-1">이름 *</label>
+                            <input type="text" value={formPerson2Name} onChange={e => { setFormPerson2Name(e.target.value); setReusedPerson2Id(null); }} placeholder="이름" className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-red-600 mb-1">성별</label>
+                            <select value={formPerson2Gender} onChange={e => setFormPerson2Gender(e.target.value)} className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+                              <option value="male">남성</option>
+                              <option value="female">여성</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-red-600 mb-1">생년월일 *</label>
+                            <input type="text" value={formPerson2BirthDate} onChange={e => { setFormPerson2BirthDate(e.target.value); setReusedPerson2Id(null); }} placeholder="1990-01-15" className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-red-600 mb-1">출생시간</label>
+                            <input type="text" value={formPerson2BirthTime} onChange={e => setFormPerson2BirthTime(e.target.value)} placeholder="14:30" className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-red-600 mb-1">간지시간</label>
+                            <select value={formPerson2BirthTimeGanji} onChange={e => setFormPerson2BirthTimeGanji(e.target.value)} className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+                              {ganjiTimes.map(g => (
+                                <option key={g.value} value={g.value}>{g.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-red-600 mb-1">음양력</label>
+                            <select value={formPerson2CalendarType} onChange={e => setFormPerson2CalendarType(e.target.value)} className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+                              <option value="solar">양력</option>
+                              <option value="lunar">음력</option>
+                              <option value="leap">윤달</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">추가질문</label>
                       <textarea
@@ -1523,6 +1638,9 @@ export default function OrdersPage() {
                         </option>
                       ))}
                     </select>
+                    {excelProductCode === 'saju-love' && (
+                      <p className="text-xs text-red-500 mt-1">궁합: 같은 닉네임의 두 행이 자동 페어링됩니다</p>
+                    )}
                   </div>
                   <div className="flex-1">
                     <label className="block text-xs font-medium text-gray-600 mb-1">엑셀 파일</label>
@@ -1651,6 +1769,54 @@ export default function OrdersPage() {
                     </div>
                   ))}
                   {loadCustomerList.length === 0 && (
+                    <p className="text-center text-gray-400 text-sm py-8">고객 데이터가 없습니다.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 궁합 대상 고객 선택 모달 */}
+        {showLoadPerson2Modal && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]" onClick={() => setShowLoadPerson2Modal(false)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 max-h-[70vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b border-red-100">
+                <h3 className="text-sm font-bold text-red-700">궁합 대상 고객 선택</h3>
+                <button onClick={() => setShowLoadPerson2Modal(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+              </div>
+              <div className="p-4">
+                <input
+                  type="text"
+                  placeholder="고객명 검색..."
+                  value={loadPerson2Search}
+                  onChange={e => { setLoadPerson2Search(e.target.value); fetchPerson2ForLoad(e.target.value); }}
+                  className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 mb-3"
+                  autoFocus
+                />
+                <div className="max-h-[45vh] overflow-y-auto space-y-1">
+                  {loadPerson2List.filter((c: any) => {
+                    if (!loadPerson2Search) return true;
+                    const q = loadPerson2Search.toLowerCase();
+                    return c.name?.toLowerCase().includes(q) || c.nickname?.toLowerCase().includes(q) || c.customer_code?.toLowerCase().includes(q);
+                  }).map((cus: any) => (
+                    <div
+                      key={cus.id}
+                      onClick={() => loadPerson2Data(cus)}
+                      className="p-3 rounded-lg cursor-pointer hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-900">{cus.name}</span>
+                        {cus.customer_code && <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-mono">{cus.customer_code}</span>}
+                        {cus.nickname && <span className="text-xs text-gray-400">({cus.nickname})</span>}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {cus.gender === 'male' ? '남' : '여'} · {cus.birth_date}
+                        {cus.calendar_type === 'lunar' ? ' · 음력' : cus.calendar_type === 'leap' ? ' · 윤달' : ''}
+                      </div>
+                    </div>
+                  ))}
+                  {loadPerson2List.length === 0 && (
                     <p className="text-center text-gray-400 text-sm py-8">고객 데이터가 없습니다.</p>
                   )}
                 </div>

@@ -243,6 +243,19 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_journals_user_id ON journals(user_id);
     CREATE INDEX IF NOT EXISTS idx_saju_fortune_data_order_id ON saju_fortune_data(order_id);
     CREATE INDEX IF NOT EXISTS idx_saju_narratives_order_id ON saju_narratives(order_id);
+
+    -- 궁합 페어링 (두 사람 연결)
+    CREATE TABLE IF NOT EXISTS compatibility_pairs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL UNIQUE,
+      customer_id_1 INTEGER NOT NULL,
+      customer_id_2 INTEGER NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (order_id) REFERENCES orders(id),
+      FOREIGN KEY (customer_id_1) REFERENCES customers(id),
+      FOREIGN KEY (customer_id_2) REFERENCES customers(id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_compat_pairs_order ON compatibility_pairs(order_id);
   `);
 
   // Migration: consultations 테이블 재생성 (NOT NULL/FK 제약 제거)
@@ -688,6 +701,42 @@ export function getOrdersGrouped(userId: number, filters?: {
 export function updateCustomerNickname(id: number, userId: number, nickname: string) {
   const db = getDb();
   db.prepare("UPDATE customers SET nickname = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?").run(nickname, id, userId);
+}
+
+// ============ 궁합 페어링 ============
+/** 궁합 페어링 생성 */
+export function createCompatibilityPair(orderId: number, customerId1: number, customerId2: number) {
+  const db = getDb();
+  return db.prepare('INSERT INTO compatibility_pairs (order_id, customer_id_1, customer_id_2) VALUES (?, ?, ?)').run(orderId, customerId1, customerId2);
+}
+
+/** 주문 ID로 궁합 페어링 조회 */
+export function getCompatibilityPair(orderId: number) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT cp.*,
+      c1.name as person1_name, c1.gender as person1_gender, c1.birth_date as person1_birth_date,
+      c1.birth_time as person1_birth_time, c1.calendar_type as person1_calendar_type, c1.customer_code as person1_code,
+      c2.name as person2_name, c2.gender as person2_gender, c2.birth_date as person2_birth_date,
+      c2.birth_time as person2_birth_time, c2.calendar_type as person2_calendar_type, c2.customer_code as person2_code
+    FROM compatibility_pairs cp
+    JOIN customers c1 ON cp.customer_id_1 = c1.id
+    JOIN customers c2 ON cp.customer_id_2 = c2.id
+    WHERE cp.order_id = ?
+  `).get(orderId) as any | undefined;
+}
+
+/** 여러 주문의 궁합 페어링 일괄 조회 */
+export function getCompatibilityPairsForOrders(orderIds: number[]) {
+  if (orderIds.length === 0) return [];
+  const db = getDb();
+  const placeholders = orderIds.map(() => '?').join(',');
+  return db.prepare(`
+    SELECT cp.order_id, c2.name as partner_name, c2.customer_code as partner_code
+    FROM compatibility_pairs cp
+    JOIN customers c2 ON cp.customer_id_2 = c2.id
+    WHERE cp.order_id IN (${placeholders})
+  `).all(...orderIds) as any[];
 }
 
 // ============ 상품 ============
