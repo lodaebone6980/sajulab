@@ -197,147 +197,154 @@ export async function POST(request: NextRequest) {
 
     const orderId = orderResult.lastInsertRowid as number;
 
-    // Trigger analysis automatically
-    try {
-      // Mark as requested
-      updateOrderStatus(orderId, userId, 'requested');
-      updateOrderProgress(orderId, userId, 3, '사주 데이터 분석 시작');
+    // Mark as requested immediately
+    updateOrderStatus(orderId, userId, 'requested');
+    updateOrderProgress(orderId, userId, 1, '주문 접수 완료, 분석 대기중');
 
-      // Perform analysis
-      const birthDateParts = birthDate.split('-').map(Number);
-      const birthTimeParts = (birthTime || '00:00').split(':').map(Number);
-
-      const sajuResult = await analyzeSajuWithFortune({
-        year: birthDateParts[0],
-        month: birthDateParts[1],
-        day: birthDateParts[2],
-        hour: birthTimeParts[0],
-        minute: birthTimeParts[1],
-        gender: gender === 'male' ? 'male' : 'female',
-        isLunar: calendarType === 'lunar' || calendarType === 'leap',
-      });
-
-      // Mark as analyzing
-      updateOrderStatus(orderId, userId, 'analyzing');
-      updateOrderProgress(orderId, userId, 15, '사주 데이터 분석 완료');
-
-      // Save result_json to database
-      const resultJson = JSON.stringify(sajuResult);
-      updateOrderResult(orderId, userId, resultJson);
-
-      // 운세 데이터 10섹션 저장 (sajulab.kr 동일 구조)
+    // Background analysis (fire and forget - don't await)
+    const runAnalysis = async () => {
       try {
-        const sections = convertSajuResultToSections(sajuResult, customerName, gender, calendarType || 'solar');
-        const totalLines = countTotalLines(sections);
-        saveFortuneData(orderId, customerName, JSON.stringify(sajuResult.birthInfo), {
-          info: JSON.stringify(sections.info),
-          pillar: JSON.stringify(sections.pillar),
-          yongsin: JSON.stringify(sections.yongsin),
-          yinyang: JSON.stringify(sections.yinyang),
-          shinsal: JSON.stringify(sections.shinsal),
-          hyungchung: JSON.stringify(sections.hyungchung),
-          daeun: JSON.stringify(sections.daeun),
-          nyunun: JSON.stringify(sections.nyunun),
-          wolun: JSON.stringify(sections.wolun),
-          wolun2: JSON.stringify(sections.wolun2),
-        }, totalLines);
-      } catch (fdError) {
-        console.error('Fortune data save error (non-fatal):', fdError);
-      }
+        updateOrderProgress(orderId, userId, 3, '사주 데이터 분석 시작');
 
-      // Generate PDF (skip for saju-data product)
-      if (product.code !== 'saju-data') {
-        updateOrderProgress(orderId, userId, 18, '내러티브 생성 준비');
+        // Perform analysis
+        const birthDateParts = birthDate.split('-').map(Number);
+        const birthTimeParts = (birthTime || '00:00').split(':').map(Number);
 
-        // 챕터별 진행률 콜백
-        const onNarrativeProgress = (chapterNum: number, totalChapters: number, phase: string) => {
-          try {
-            if (phase === 'greeting_done') {
-              updateOrderProgress(orderId, userId, 20, '인사말 생성 완료');
-            } else if (phase === 'chapter_done') {
-              const chapterProgress = Math.round(20 + (chapterNum / totalChapters) * 68);
-              updateOrderProgress(orderId, userId, chapterProgress, `${chapterNum}/${totalChapters} 챕터 생성 완료`);
-            }
-          } catch (e) {
-            console.error('Progress update error (non-fatal):', e);
-          }
-        };
-
-        // LLM 내러티브 생성 시도 (OpenAI API 키가 있으면)
-        let narrative = await generateNarrative(sajuResult, customerName, product.code, onNarrativeProgress);
-
-        // API 키 없으면 fallback 내러티브 사용
-        if (!narrative) {
-          narrative = generateFallbackNarrative(sajuResult, customerName, product.code);
-        }
-
-        // LLM 내러티브 DB 캐시 저장
-        if (narrative) {
-          try {
-            saveNarrative(orderId, product.code, {
-              greeting: narrative.greeting,
-              chapters: JSON.stringify(narrative.chapters),
-              model: narrative.model || 'fallback',
-              promptTokens: narrative.tokenUsage?.input || 0,
-              completionTokens: narrative.tokenUsage?.output || 0,
-            });
-          } catch (nErr) {
-            console.error('Narrative save error (non-fatal):', nErr);
-          }
-        }
-
-        updateOrderStatus(orderId, userId, 'pdf_generating');
-        updateOrderProgress(orderId, userId, 90, 'PDF 파일 생성중');
-
-        const pdfBuffer = await generateSajuPdf(sajuResult, {
-          customerName,
-          productName: product.name,
-          productCode: product.code,
-          narrative,
+        const sajuResult = await analyzeSajuWithFortune({
+          year: birthDateParts[0],
+          month: birthDateParts[1],
+          day: birthDateParts[2],
+          hour: birthTimeParts[0],
+          minute: birthTimeParts[1],
+          gender: gender === 'male' ? 'male' : 'female',
+          isLunar: calendarType === 'lunar' || calendarType === 'leap',
         });
 
-        // Save PDF to file
-        const pdfDir = getPdfDir();
-        const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
-        fs.writeFileSync(pdfPath, pdfBuffer);
+        // Mark as analyzing
+        updateOrderStatus(orderId, userId, 'analyzing');
+        updateOrderProgress(orderId, userId, 15, '사주 데이터 분석 완료');
 
-        // Save pdf_url
-        const db = getDb();
-        db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
-          .run(`/api/orders/${orderId}/pdf`, orderId, userId);
+        // Save result_json to database
+        const resultJson = JSON.stringify(sajuResult);
+        updateOrderResult(orderId, userId, resultJson);
 
-        updateOrderProgress(orderId, userId, 95, 'PDF 저장 완료');
-
-        // Google Drive 업로드
-        if (isDriveConfigured()) {
-          try {
-            updateOrderProgress(orderId, userId, 97, 'Google Drive 업로드중');
-            const driveFileName = `${customerName}_${product.code}_${orderId}.pdf`;
-            const driveResult = await uploadPdfToDrive(pdfBuffer, driveFileName);
-            updateOrderDriveInfo(orderId, userId, driveResult.fileId, driveResult.webViewLink);
-            console.log(`[Drive] ✅ Order ${orderId} uploaded: ${driveResult.webViewLink}`);
-          } catch (driveErr) {
-            console.error(`[Drive] ❌ Upload failed for order ${orderId}:`, driveErr);
-          }
+        // 운세 데이터 10섹션 저장 (sajulab.kr 동일 구조)
+        try {
+          const sections = convertSajuResultToSections(sajuResult, customerName, gender, calendarType || 'solar');
+          const totalLines = countTotalLines(sections);
+          saveFortuneData(orderId, customerName, JSON.stringify(sajuResult.birthInfo), {
+            info: JSON.stringify(sections.info),
+            pillar: JSON.stringify(sections.pillar),
+            yongsin: JSON.stringify(sections.yongsin),
+            yinyang: JSON.stringify(sections.yinyang),
+            shinsal: JSON.stringify(sections.shinsal),
+            hyungchung: JSON.stringify(sections.hyungchung),
+            daeun: JSON.stringify(sections.daeun),
+            nyunun: JSON.stringify(sections.nyunun),
+            wolun: JSON.stringify(sections.wolun),
+            wolun2: JSON.stringify(sections.wolun2),
+          }, totalLines);
+        } catch (fdError) {
+          console.error('Fortune data save error (non-fatal):', fdError);
         }
 
-        updateOrderProgress(orderId, userId, 99, '처리 완료');
-      }
+        // Generate PDF (skip for saju-data product)
+        if (product.code !== 'saju-data') {
+          updateOrderProgress(orderId, userId, 18, '내러티브 생성 준비');
 
-      // Mark as completed
-      updateOrderStatus(orderId, userId, 'completed');
-    } catch (analysisError) {
-      console.error('Analysis error:', analysisError);
-      // Mark as failed but don't return error - order was created
-      updateOrderStatus(orderId, userId, 'failed');
-    }
+          // 챕터별 진행률 콜백
+          const onNarrativeProgress = (chapterNum: number, totalChapters: number, phase: string) => {
+            try {
+              if (phase === 'greeting_done') {
+                updateOrderProgress(orderId, userId, 20, '인사말 생성 완료');
+              } else if (phase === 'chapter_done') {
+                const chapterProgress = Math.round(20 + (chapterNum / totalChapters) * 68);
+                updateOrderProgress(orderId, userId, chapterProgress, `${chapterNum}/${totalChapters} 챕터 생성 완료`);
+              }
+            } catch (e) {
+              console.error('Progress update error (non-fatal):', e);
+            }
+          };
+
+          // LLM 내러티브 생성 시도 (OpenAI API 키가 있으면)
+          let narrative = await generateNarrative(sajuResult, customerName, product.code, onNarrativeProgress);
+
+          // API 키 없으면 fallback 내러티브 사용
+          if (!narrative) {
+            narrative = generateFallbackNarrative(sajuResult, customerName, product.code);
+          }
+
+          // LLM 내러티브 DB 캐시 저장
+          if (narrative) {
+            try {
+              saveNarrative(orderId, product.code, {
+                greeting: narrative.greeting,
+                chapters: JSON.stringify(narrative.chapters),
+                model: narrative.model || 'fallback',
+                promptTokens: narrative.tokenUsage?.input || 0,
+                completionTokens: narrative.tokenUsage?.output || 0,
+              });
+            } catch (nErr) {
+              console.error('Narrative save error (non-fatal):', nErr);
+            }
+          }
+
+          updateOrderStatus(orderId, userId, 'pdf_generating');
+          updateOrderProgress(orderId, userId, 90, 'PDF 파일 생성중');
+
+          const pdfBuffer = await generateSajuPdf(sajuResult, {
+            customerName,
+            productName: product.name,
+            productCode: product.code,
+            narrative,
+          });
+
+          // Save PDF to file
+          const pdfDir = getPdfDir();
+          const pdfPath = path.join(pdfDir, `${orderId}.pdf`);
+          fs.writeFileSync(pdfPath, pdfBuffer);
+
+          // Save pdf_url
+          const db = getDb();
+          db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+            .run(`/api/orders/${orderId}/pdf`, orderId, userId);
+
+          updateOrderProgress(orderId, userId, 95, 'PDF 저장 완료');
+
+          // Google Drive 업로드
+          if (isDriveConfigured()) {
+            try {
+              updateOrderProgress(orderId, userId, 97, 'Google Drive 업로드중');
+              const driveFileName = `${customerName}_${product.code}_${orderId}.pdf`;
+              const driveResult = await uploadPdfToDrive(pdfBuffer, driveFileName);
+              updateOrderDriveInfo(orderId, userId, driveResult.fileId, driveResult.webViewLink);
+              console.log(`[Drive] ✅ Order ${orderId} uploaded: ${driveResult.webViewLink}`);
+            } catch (driveErr) {
+              console.error(`[Drive] ❌ Upload failed for order ${orderId}:`, driveErr);
+            }
+          }
+
+          updateOrderProgress(orderId, userId, 99, '처리 완료');
+        }
+
+        // Mark as completed
+        updateOrderStatus(orderId, userId, 'completed');
+        console.log(`[Order] ✅ Order ${orderId} analysis completed`);
+      } catch (analysisError) {
+        console.error(`[Order] ❌ Analysis error for order ${orderId}:`, analysisError);
+        updateOrderStatus(orderId, userId, 'failed');
+      }
+    };
+
+    // Fire background analysis (don't await - respond immediately)
+    runAnalysis().catch(err => console.error('[Order] Background analysis fatal error:', err));
 
     return NextResponse.json(
       {
         success: true,
         orderId,
         customerId,
-        message: '주문이 생성되었습니다.',
+        message: '주문이 생성되었습니다. 분석이 백그라운드에서 진행됩니다.',
       },
       { status: 201 }
     );
