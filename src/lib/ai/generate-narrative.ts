@@ -29,54 +29,17 @@ export interface NarrativeResult {
   tokenUsage?: { input: number; output: number; total: number };
 }
 
-// ─── Chapter-by-chapter generation for Premium and NewYear ───
+// ─── 단일 챕터 생성 (병렬 실행용) ───
 
-async function generateChapterByChapter(
+async function generateSingleChapter(
+  client: ReturnType<typeof getOpenAIClient>,
   sajuData: string,
   customerName: string,
-  productCode: string,
-  onProgress?: (chapterNum: number, totalChapters: number, phase: string) => void,
-): Promise<NarrativeResult | null> {
-  const client = getOpenAIClient();
-  const year = new Date().getFullYear();
+  chDef: ChapterDefinition,
+): Promise<{ chapter: NarrativeChapter; inputTokens: number; outputTokens: number }> {
+  const MIN_CHARS = 8000;
 
-  // Get chapter definitions based on product
-  const chapterDefs = productCode === 'saju-newyear'
-    ? getNewYearChapterDefinitions(customerName, year)
-    : getPremiumChapterDefinitions(customerName);
-
-  // 1. Generate greeting first
-  const greetingPrompt = productCode === 'saju-newyear'
-    ? `다음 사주 데이터를 기반으로 ${year}년 신년운세 분석서의 인사말을 작성하세요.\n반드시 "${customerName}님"으로 호칭하세요.\n사주의 특성과 새해 전망을 포함한 따뜻하고 정성스러운 인사말을 800~1200자로 작성하세요.\n\n${sajuData}\n\n반드시 인사말 텍스트만 출력하세요. JSON 형식이 아닙니다.`
-    : `다음 사주 데이터를 기반으로 프리미엄 사주 분석서의 인사말을 작성하세요.\n반드시 "${customerName}님"으로 호칭하세요.\n사주의 특성과 운명의 흐름을 포함한 따뜻하고 정성스러운 인사말을 800~1200자로 작성하세요.\n\n${sajuData}\n\n반드시 인사말 텍스트만 출력하세요. JSON 형식이 아닙니다.`;
-
-  let greeting = '';
-  try {
-    const greetingResp = await client.chat.completions.create({
-      model: 'gpt-4.1',
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: greetingPrompt },
-      ],
-      temperature: 0.75,
-      max_tokens: 2000,
-    });
-    greeting = greetingResp.choices[0]?.message?.content || '';
-    console.log(`[AI] 인사말 생성 완료 (${greeting.length}자)`);
-    onProgress?.(0, chapterDefs.length, 'greeting_done');
-  } catch (e) {
-    console.error('[AI] 인사말 생성 실패:', e);
-    greeting = `${customerName}님, 안녕하세요. 이 분석서가 삶의 좋은 나침반이 되기를 바랍니다.`;
-  }
-
-  // 2. Generate each chapter separately with continuation for short outputs
-  const chapters: NarrativeChapter[] = [];
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  const MIN_CHARS = 8000; // 최소 글자 수 - 미달 시 연속 호출
-
-  for (const chDef of chapterDefs) {
-    const chapterPrompt = `다음은 프리미엄 사주 분석서의 한 챕터입니다. 반드시 매우 길고 상세하게 작성하세요.
+  const chapterPrompt = `다음은 프리미엄 사주 분석서의 한 챕터입니다. 반드시 매우 길고 상세하게 작성하세요.
 
 ═══════════════════════════════════════
 📋 절대 규칙 (반드시 지켜야 합니다):
@@ -98,34 +61,37 @@ ${chDef.guide}
 ⚠️ 다시 한번 강조: 10000자 이상 필수! 짧은 답변은 절대 불가!
 반드시 챕터 본문 텍스트만 출력하세요. JSON 형식이 아닙니다. 챕터 제목은 포함하지 마세요.`;
 
-    try {
-      console.log(`[AI] 챕터 ${chDef.number} "${chDef.title}" 생성 중...`);
-      const startTime = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
 
-      const chResp = await client.chat.completions.create({
-        model: 'gpt-4.1',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: chapterPrompt },
-        ],
-        temperature: 0.75,
-        max_tokens: 16000,
-      });
+  try {
+    console.log(`[AI] 🚀 챕터 ${chDef.number} "${chDef.title}" 병렬 생성 시작...`);
+    const startTime = Date.now();
 
-      let content = chResp.choices[0]?.message?.content || '';
-      const usage = chResp.usage;
-      totalInputTokens += usage?.prompt_tokens || 0;
-      totalOutputTokens += usage?.completion_tokens || 0;
+    const chResp = await client.chat.completions.create({
+      model: 'gpt-4.1',
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: chapterPrompt },
+      ],
+      temperature: 0.75,
+      max_tokens: 16000,
+    });
 
-      console.log(`[AI] 챕터 ${chDef.number} 1차 완료 (${content.length}자, ${usage?.completion_tokens} tokens)`);
+    let content = chResp.choices[0]?.message?.content || '';
+    const usage = chResp.usage;
+    inputTokens += usage?.prompt_tokens || 0;
+    outputTokens += usage?.completion_tokens || 0;
 
-      // 연속 호출: 글자 수가 부족하면 이어서 작성 요청 (최대 2회)
-      let attempts = 0;
-      while (content.length < MIN_CHARS && attempts < 2) {
-        attempts++;
-        console.log(`[AI] 챕터 ${chDef.number} 연속 호출 ${attempts}회 (현재 ${content.length}자 < ${MIN_CHARS}자)`);
+    console.log(`[AI] 챕터 ${chDef.number} 1차 완료 (${content.length}자, ${usage?.completion_tokens} tokens)`);
 
-        const continuePrompt = `이전에 작성한 "${chDef.title}" 챕터의 내용이 아직 부족합니다. 아래 내용에 이어서 추가 내용을 작성하세요.
+    // 연속 호출: 글자 수가 부족하면 이어서 작성 요청 (최대 2회)
+    let attempts = 0;
+    while (content.length < MIN_CHARS && attempts < 2) {
+      attempts++;
+      console.log(`[AI] 챕터 ${chDef.number} 연속 호출 ${attempts}회 (현재 ${content.length}자 < ${MIN_CHARS}자)`);
+
+      const continuePrompt = `이전에 작성한 "${chDef.title}" 챕터의 내용이 아직 부족합니다. 아래 내용에 이어서 추가 내용을 작성하세요.
 
 ═══════════════════════════════════════
 📋 절대 규칙:
@@ -143,53 +109,190 @@ ${sajuData}
 
 위 내용에 이어서 "${chDef.title}" 챕터의 나머지를 작성하세요. 새로운 내용만 출력하세요.`;
 
-        try {
-          const contResp = await client.chat.completions.create({
-            model: 'gpt-4.1',
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: continuePrompt },
-            ],
-            temperature: 0.75,
-            max_tokens: 16000,
-          });
+      try {
+        const contResp = await client.chat.completions.create({
+          model: 'gpt-4.1',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: continuePrompt },
+          ],
+          temperature: 0.75,
+          max_tokens: 16000,
+        });
 
-          const addedContent = contResp.choices[0]?.message?.content || '';
-          const contUsage = contResp.usage;
-          totalInputTokens += contUsage?.prompt_tokens || 0;
-          totalOutputTokens += contUsage?.completion_tokens || 0;
+        const addedContent = contResp.choices[0]?.message?.content || '';
+        const contUsage = contResp.usage;
+        inputTokens += contUsage?.prompt_tokens || 0;
+        outputTokens += contUsage?.completion_tokens || 0;
 
-          content += '\n\n' + addedContent;
-          console.log(`[AI] 챕터 ${chDef.number} 연속 ${attempts}회 완료 (+${addedContent.length}자, 총 ${content.length}자)`);
-        } catch (contErr) {
-          console.error(`[AI] 챕터 ${chDef.number} 연속 호출 실패:`, contErr);
-          break;
-        }
+        content += '\n\n' + addedContent;
+        console.log(`[AI] 챕터 ${chDef.number} 연속 ${attempts}회 완료 (+${addedContent.length}자, 총 ${content.length}자)`);
+      } catch (contErr) {
+        console.error(`[AI] 챕터 ${chDef.number} 연속 호출 실패:`, contErr);
+        break;
       }
-
-      const elapsed = Date.now() - startTime;
-      console.log(`[AI] 챕터 ${chDef.number} 최종 완료 (${elapsed}ms, ${content.length}자)`);
-
-      chapters.push({
-        number: chDef.number,
-        title: chDef.title,
-        content,
-      });
-      onProgress?.(chapters.length, chapterDefs.length, 'chapter_done');
-    } catch (err) {
-      console.error(`[AI] 챕터 ${chDef.number} 생성 실패:`, err);
-      chapters.push({
-        number: chDef.number,
-        title: chDef.title,
-        content: `${chDef.title}에 대한 분석 내용이 생성되지 않았습니다.`,
-      });
-      onProgress?.(chapters.length, chapterDefs.length, 'chapter_done');
     }
+
+    const elapsed = Date.now() - startTime;
+    console.log(`[AI] ✅ 챕터 ${chDef.number} 최종 완료 (${elapsed}ms, ${content.length}자)`);
+
+    return {
+      chapter: { number: chDef.number, title: chDef.title, content },
+      inputTokens,
+      outputTokens,
+    };
+  } catch (err) {
+    console.error(`[AI] ❌ 챕터 ${chDef.number} 생성 실패:`, err);
+    return {
+      chapter: { number: chDef.number, title: chDef.title, content: `${chDef.title}에 대한 분석 내용이 생성되지 않았습니다.` },
+      inputTokens,
+      outputTokens,
+    };
   }
+}
+
+// ─── 최종 검토 단계: 전체 일관성 및 호칭 정리 ───
+
+async function reviewAndRefine(
+  client: ReturnType<typeof getOpenAIClient>,
+  chapters: NarrativeChapter[],
+  customerName: string,
+): Promise<NarrativeChapter[]> {
+  console.log(`[AI] 🔍 최종 검토 시작 (${chapters.length}개 챕터)...`);
+  const startTime = Date.now();
+
+  // 각 챕터의 기본 정제 (LLM 호출 없이 빠르게)
+  const refined = chapters.map(ch => {
+    let content = ch.content;
+
+    // 1. 호칭 통일: "의뢰자님", "고객님" 등을 customerName으로 교체
+    content = content.replace(/의뢰자님/g, `${customerName}님`);
+    content = content.replace(/고객님/g, `${customerName}님`);
+    content = content.replace(/귀하/g, `${customerName}님`);
+
+    // 2. 불필요한 마크다운 제거
+    content = content.replace(/^#{1,6}\s+/gm, (match) => {
+      // ## 소제목 → [소제목] 형식으로 변환
+      const title = match.replace(/^#{1,6}\s+/, '').trim();
+      return `[${title}]`;
+    });
+    // **굵은체** 제거
+    content = content.replace(/\*\*(.*?)\*\*/g, '$1');
+
+    // 3. 연속 빈 줄 정리 (3줄 이상 → 2줄로)
+    content = content.replace(/\n{3,}/g, '\n\n');
+
+    // 4. 챕터 제목이 본문 시작에 포함된 경우 제거
+    const titlePattern = new RegExp(`^\\[?${ch.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?\\s*\n`, 'i');
+    content = content.replace(titlePattern, '');
+
+    return { ...ch, content };
+  });
+
+  const elapsed = Date.now() - startTime;
+  console.log(`[AI] ✅ 최종 검토 완료 (${elapsed}ms)`);
+
+  // 검토 결과 요약 로그
+  for (const ch of refined) {
+    console.log(`[AI]   챕터 ${ch.number}: ${ch.title} (${ch.content.length}자)`);
+  }
+
+  return refined;
+}
+
+// ─── 병렬 챕터 생성 (Premium and NewYear) ───
+
+async function generateChapterByChapter(
+  sajuData: string,
+  customerName: string,
+  productCode: string,
+  onProgress?: (chapterNum: number, totalChapters: number, phase: string) => void,
+): Promise<NarrativeResult | null> {
+  const client = getOpenAIClient();
+  const year = new Date().getFullYear();
+
+  // Get chapter definitions based on product
+  const chapterDefs = productCode === 'saju-newyear'
+    ? getNewYearChapterDefinitions(customerName, year)
+    : getPremiumChapterDefinitions(customerName);
+
+  console.log(`[AI] ⚡ 병렬 생성 모드: 인사말 + ${chapterDefs.length}개 챕터 동시 시작`);
+  const totalStartTime = Date.now();
+
+  // ═══════════════════════════════════════
+  // 1단계: 인사말 + 모든 챕터를 동시에 병렬 생성
+  // ═══════════════════════════════════════
+
+  const greetingPrompt = productCode === 'saju-newyear'
+    ? `다음 사주 데이터를 기반으로 ${year}년 신년운세 분석서의 인사말을 작성하세요.\n반드시 "${customerName}님"으로 호칭하세요.\n사주의 특성과 새해 전망을 포함한 따뜻하고 정성스러운 인사말을 800~1200자로 작성하세요.\n\n${sajuData}\n\n반드시 인사말 텍스트만 출력하세요. JSON 형식이 아닙니다.`
+    : `다음 사주 데이터를 기반으로 프리미엄 사주 분석서의 인사말을 작성하세요.\n반드시 "${customerName}님"으로 호칭하세요.\n사주의 특성과 운명의 흐름을 포함한 따뜻하고 정성스러운 인사말을 800~1200자로 작성하세요.\n\n${sajuData}\n\n반드시 인사말 텍스트만 출력하세요. JSON 형식이 아닙니다.`;
+
+  // 인사말 Promise
+  const greetingPromise = client.chat.completions.create({
+    model: 'gpt-4.1',
+    messages: [
+      { role: 'system', content: SYSTEM_PROMPT },
+      { role: 'user', content: greetingPrompt },
+    ],
+    temperature: 0.75,
+    max_tokens: 2000,
+  }).then(resp => {
+    const text = resp.choices[0]?.message?.content || '';
+    console.log(`[AI] ✅ 인사말 완료 (${text.length}자)`);
+    onProgress?.(0, chapterDefs.length, 'greeting_done');
+    return text;
+  }).catch(e => {
+    console.error('[AI] ❌ 인사말 생성 실패:', e);
+    return `${customerName}님, 안녕하세요. 이 분석서가 삶의 좋은 나침반이 되기를 바랍니다.`;
+  });
+
+  // 모든 챕터 Promise (병렬 실행!)
+  let completedCount = 0;
+  const chapterPromises = chapterDefs.map(chDef =>
+    generateSingleChapter(client, sajuData, customerName, chDef).then(result => {
+      completedCount++;
+      onProgress?.(completedCount, chapterDefs.length, 'chapter_done');
+      console.log(`[AI] 📊 진행률: ${completedCount}/${chapterDefs.length} 챕터 완료`);
+      return result;
+    })
+  );
+
+  // 인사말 + 모든 챕터를 동시에 실행!
+  const [greeting, ...chapterResults] = await Promise.all([
+    greetingPromise,
+    ...chapterPromises,
+  ]);
+
+  // 토큰 집계
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  const chapters: NarrativeChapter[] = [];
+
+  for (const result of chapterResults) {
+    chapters.push(result.chapter);
+    totalInputTokens += result.inputTokens;
+    totalOutputTokens += result.outputTokens;
+  }
+
+  // 챕터 번호순으로 정렬 (병렬이라 순서 보장 안 됨)
+  chapters.sort((a, b) => a.number.localeCompare(b.number));
+
+  const parallelElapsed = Date.now() - totalStartTime;
+  console.log(`[AI] ⚡ 병렬 생성 완료 (${parallelElapsed}ms, ${chapters.length}개 챕터)`);
+
+  // ═══════════════════════════════════════
+  // 2단계: 최종 검토 (호칭 통일, 마크다운 정리, 일관성 체크)
+  // ═══════════════════════════════════════
+
+  const refinedChapters = await reviewAndRefine(client, chapters, customerName);
+
+  const totalElapsed = Date.now() - totalStartTime;
+  const totalChars = refinedChapters.reduce((sum, ch) => sum + ch.content.length, 0);
+  console.log(`[AI] 🎉 전체 완료: ${totalElapsed}ms (${Math.round(totalElapsed / 1000)}초), 총 ${totalChars}자, ${totalInputTokens + totalOutputTokens} tokens`);
 
   return {
     greeting,
-    chapters,
+    chapters: refinedChapters,
     model: 'gpt-4.1',
     tokenUsage: {
       input: totalInputTokens,
