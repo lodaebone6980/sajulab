@@ -41,9 +41,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const result = createConsultation(authResult.userId, body);
     return NextResponse.json({ success: true, id: result.lastInsertRowid });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Create consultation error:', error);
-    return NextResponse.json({ error: '상담 기록 생성에 실패했습니다.' }, { status: 500 });
+    return NextResponse.json({ error: `상담 기록 생성 실패: ${error?.message || String(error)}` }, { status: 500 });
   }
 }
 
