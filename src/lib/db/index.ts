@@ -242,27 +242,45 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_saju_narratives_order_id ON saju_narratives(order_id);
   `);
 
-  // Migration: consultations 테이블 컬럼 추가 (기존 DB 호환)
-  const consultationNewCols = [
-    ['date', 'TEXT DEFAULT \'\''],
-    ['chat_history', 'TEXT DEFAULT \'\''],
-    ['chat_link', 'TEXT DEFAULT \'\''],
-    ['status', 'TEXT DEFAULT \'pending\''],
-    ['gender', 'TEXT DEFAULT \'\''],
-    ['name', 'TEXT DEFAULT \'\''],
-    ['birth_date', 'TEXT DEFAULT \'\''],
-    ['calendar_type', 'TEXT DEFAULT \'solar\''],
-    ['birth_time', 'TEXT DEFAULT \'\''],
-    ['ganji', 'TEXT DEFAULT \'\''],
-    ['email', 'TEXT DEFAULT \'\''],
-    ['product', 'TEXT DEFAULT \'\''],
-    ['amount', 'INTEGER DEFAULT 0'],
-    ['question', 'TEXT DEFAULT \'\''],
-    ['additional_payment', 'TEXT DEFAULT \'\''],
-    ['note', 'TEXT DEFAULT \'\''],
-  ];
-  for (const [col, type] of consultationNewCols) {
-    try { db.exec(`ALTER TABLE consultations ADD COLUMN ${col} ${type}`); } catch {}
+  // Migration: consultations 테이블 재생성 (FOREIGN KEY 제약 제거, 컬럼 추가)
+  // 기존 테이블에 customer_id NOT NULL + FOREIGN KEY가 있어 새 레코드 생성 불가 → 재생성
+  try {
+    const hasNameCol = db.prepare("SELECT COUNT(*) as cnt FROM pragma_table_info('consultations') WHERE name='name'").get() as any;
+    if (!hasNameCol || hasNameCol.cnt === 0) {
+      // 기존 구조 → 새 구조로 재생성 (데이터 백업 후 이전)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS consultations_backup AS SELECT * FROM consultations;
+        DROP TABLE IF EXISTS consultations;
+        CREATE TABLE consultations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          customer_id INTEGER DEFAULT NULL,
+          order_id INTEGER DEFAULT NULL,
+          date TEXT DEFAULT '',
+          chat_history TEXT DEFAULT '',
+          chat_link TEXT DEFAULT '',
+          status TEXT DEFAULT 'pending' CHECK(status IN ('pending','in_progress','completed','no_show')),
+          gender TEXT DEFAULT '',
+          name TEXT DEFAULT '',
+          birth_date TEXT DEFAULT '',
+          calendar_type TEXT DEFAULT 'solar',
+          birth_time TEXT DEFAULT '',
+          ganji TEXT DEFAULT '',
+          email TEXT DEFAULT '',
+          product TEXT DEFAULT '',
+          amount INTEGER DEFAULT 0,
+          question TEXT DEFAULT '',
+          additional_payment TEXT DEFAULT '',
+          note TEXT DEFAULT '',
+          consultation_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        DROP TABLE IF EXISTS consultations_backup;
+      `);
+      console.log('[DB Migration] consultations 테이블 재생성 완료');
+    }
+  } catch (e) {
+    console.error('[DB Migration] consultations 재생성 실패:', e);
   }
 
   // Migration: cover_image column 추가
@@ -628,8 +646,8 @@ export function createConsultation(userId: number, data: {
   );
   return stmt.run(
     userId,
-    data.customer_id || 0,
-    data.order_id || 0,
+    data.customer_id || null,
+    data.order_id || null,
     data.date || new Date().toISOString().split('T')[0],
     data.chat_history || '',
     data.chat_link || '',
