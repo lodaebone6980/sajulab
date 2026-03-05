@@ -107,10 +107,24 @@ function initializeDb(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS consultations (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
-      customer_id INTEGER NOT NULL,
+      customer_id INTEGER,
       order_id INTEGER,
-      title TEXT DEFAULT '',
-      content TEXT DEFAULT '',
+      date TEXT DEFAULT '',
+      chat_history TEXT DEFAULT '',
+      chat_link TEXT DEFAULT '',
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending','in_progress','completed','no_show')),
+      gender TEXT DEFAULT '',
+      name TEXT DEFAULT '',
+      birth_date TEXT DEFAULT '',
+      calendar_type TEXT DEFAULT 'solar',
+      birth_time TEXT DEFAULT '',
+      ganji TEXT DEFAULT '',
+      email TEXT DEFAULT '',
+      product TEXT DEFAULT '',
+      amount INTEGER DEFAULT 0,
+      question TEXT DEFAULT '',
+      additional_payment TEXT DEFAULT '',
+      note TEXT DEFAULT '',
       consultation_date DATETIME DEFAULT CURRENT_TIMESTAMP,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id),
@@ -227,6 +241,29 @@ function initializeDb(db: Database.Database) {
     CREATE INDEX IF NOT EXISTS idx_saju_fortune_data_order_id ON saju_fortune_data(order_id);
     CREATE INDEX IF NOT EXISTS idx_saju_narratives_order_id ON saju_narratives(order_id);
   `);
+
+  // Migration: consultations 테이블 컬럼 추가 (기존 DB 호환)
+  const consultationNewCols = [
+    ['date', 'TEXT DEFAULT \'\''],
+    ['chat_history', 'TEXT DEFAULT \'\''],
+    ['chat_link', 'TEXT DEFAULT \'\''],
+    ['status', 'TEXT DEFAULT \'pending\''],
+    ['gender', 'TEXT DEFAULT \'\''],
+    ['name', 'TEXT DEFAULT \'\''],
+    ['birth_date', 'TEXT DEFAULT \'\''],
+    ['calendar_type', 'TEXT DEFAULT \'solar\''],
+    ['birth_time', 'TEXT DEFAULT \'\''],
+    ['ganji', 'TEXT DEFAULT \'\''],
+    ['email', 'TEXT DEFAULT \'\''],
+    ['product', 'TEXT DEFAULT \'\''],
+    ['amount', 'INTEGER DEFAULT 0'],
+    ['question', 'TEXT DEFAULT \'\''],
+    ['additional_payment', 'TEXT DEFAULT \'\''],
+    ['note', 'TEXT DEFAULT \'\''],
+  ];
+  for (const [col, type] of consultationNewCols) {
+    try { db.exec(`ALTER TABLE consultations ADD COLUMN ${col} ${type}`); } catch {}
+  }
 
   // Migration: cover_image column 추가
   try {
@@ -565,27 +602,101 @@ export function getOrderStats(userId: number) {
 
 // ============ 상담 기록 ============
 export function createConsultation(userId: number, data: {
-  customer_id: number; order_id?: number; title: string; content: string;
+  customer_id?: number;
+  order_id?: number;
+  date?: string;
+  chat_history?: string;
+  chat_link?: string;
+  status?: string;
+  gender?: string;
+  name?: string;
+  birth_date?: string;
+  calendar_type?: string;
+  birth_time?: string;
+  ganji?: string;
+  email?: string;
+  product?: string;
+  amount?: number;
+  question?: string;
+  additional_payment?: string;
+  note?: string;
 }) {
   const db = getDb();
   const stmt = db.prepare(
-    'INSERT INTO consultations (user_id, customer_id, order_id, title, content) VALUES (?, ?, ?, ?, ?)'
+    `INSERT INTO consultations (user_id, customer_id, order_id, date, chat_history, chat_link, status, gender, name, birth_date, calendar_type, birth_time, ganji, email, product, amount, question, additional_payment, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
-  return stmt.run(userId, data.customer_id, data.order_id || null, data.title, data.content);
+  return stmt.run(
+    userId,
+    data.customer_id || null,
+    data.order_id || null,
+    data.date || new Date().toISOString().split('T')[0],
+    data.chat_history || '',
+    data.chat_link || '',
+    data.status || 'pending',
+    data.gender || '',
+    data.name || '',
+    data.birth_date || '',
+    data.calendar_type || 'solar',
+    data.birth_time || '',
+    data.ganji || '',
+    data.email || '',
+    data.product || '',
+    data.amount || 0,
+    data.question || '',
+    data.additional_payment || '',
+    data.note || ''
+  );
 }
 
-export function getConsultations(userId: number) {
+export function getConsultations(userId: number, filters?: { date?: string; status?: string; search?: string }) {
   const db = getDb();
-  return db.prepare(
-    `SELECT con.*, c.name as customer_name FROM consultations con
-     JOIN customers c ON con.customer_id = c.id
-     WHERE con.user_id = ? ORDER BY con.created_at DESC`
-  ).all(userId);
+  let query = `SELECT * FROM consultations WHERE user_id = ?`;
+  const params: any[] = [userId];
+
+  if (filters?.date) {
+    query += ` AND date = ?`;
+    params.push(filters.date);
+  }
+  if (filters?.status && filters.status !== 'all') {
+    query += ` AND status = ?`;
+    params.push(filters.status);
+  }
+  if (filters?.search) {
+    query += ` AND (name LIKE ? OR email LIKE ? OR question LIKE ?)`;
+    const s = `%${filters.search}%`;
+    params.push(s, s, s);
+  }
+
+  query += ` ORDER BY created_at DESC`;
+  return db.prepare(query).all(...params);
+}
+
+export function updateConsultation(id: number, userId: number, data: Record<string, any>) {
+  const db = getDb();
+  const allowedFields = ['date', 'chat_history', 'chat_link', 'status', 'gender', 'name', 'birth_date', 'calendar_type', 'birth_time', 'ganji', 'email', 'product', 'amount', 'question', 'additional_payment', 'note'];
+  const updates: string[] = [];
+  const values: any[] = [];
+  for (const [key, val] of Object.entries(data)) {
+    if (allowedFields.includes(key)) {
+      updates.push(`${key} = ?`);
+      values.push(val);
+    }
+  }
+  if (updates.length === 0) return;
+  values.push(id, userId);
+  db.prepare(`UPDATE consultations SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...values);
 }
 
 export function deleteConsultation(id: number, userId: number) {
   const db = getDb();
   db.prepare('DELETE FROM consultations WHERE id = ? AND user_id = ?').run(id, userId);
+}
+
+export function deleteConsultations(ids: number[], userId: number) {
+  const db = getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  db.prepare(`DELETE FROM consultations WHERE id IN (${placeholders}) AND user_id = ?`).run(...ids, userId);
 }
 
 // ============ 직원 ============
