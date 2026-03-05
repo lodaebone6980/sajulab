@@ -2,21 +2,38 @@ import { NextRequest, NextResponse } from 'next/server';
 import { exchangeCodeForTokens } from '@/lib/google-drive';
 import { updateUserGoogleTokens } from '@/lib/db';
 
+// 프로덕션 base URL (Railway 내부에서는 request.url이 localhost:8080이므로)
+function getBaseUrl(request: NextRequest): string {
+  // 1. X-Forwarded-Host 헤더 (프록시/Railway)
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+  // 2. 환경변수
+  if (process.env.NEXT_PUBLIC_BASE_URL) {
+    return process.env.NEXT_PUBLIC_BASE_URL;
+  }
+  // 3. fallback to request.url
+  return new URL(request.url).origin;
+}
+
 // Google OAuth2 콜백 처리
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const error = searchParams.get('error');
+  const baseUrl = getBaseUrl(request);
 
   // 에러 처리
   if (error) {
     console.error('[Google Callback] Error:', error);
-    return NextResponse.redirect(new URL('/settings?drive_error=' + encodeURIComponent('Google 인증이 취소되었습니다.'), request.url));
+    return NextResponse.redirect(`${baseUrl}/settings?drive_error=${encodeURIComponent('Google 인증이 취소되었습니다.')}`);
   }
 
   if (!code) {
-    return NextResponse.redirect(new URL('/settings?drive_error=' + encodeURIComponent('인증 코드가 없습니다.'), request.url));
+    return NextResponse.redirect(`${baseUrl}/settings?drive_error=${encodeURIComponent('인증 코드가 없습니다.')}`);
   }
 
   // state에서 userId 추출
@@ -26,7 +43,7 @@ export async function GET(request: NextRequest) {
     userId = parsed.userId;
     if (!userId) throw new Error('userId not found');
   } catch {
-    return NextResponse.redirect(new URL('/settings?drive_error=' + encodeURIComponent('잘못된 인증 요청입니다.'), request.url));
+    return NextResponse.redirect(`${baseUrl}/settings?drive_error=${encodeURIComponent('잘못된 인증 요청입니다.')}`);
   }
 
   try {
@@ -42,9 +59,9 @@ export async function GET(request: NextRequest) {
     });
 
     console.log(`[Google Callback] User ${userId} connected Drive: ${tokens.email}`);
-    return NextResponse.redirect(new URL('/settings?drive_success=true', request.url));
+    return NextResponse.redirect(`${baseUrl}/settings?drive_success=true`);
   } catch (err: any) {
     console.error('[Google Callback] Token exchange failed:', err);
-    return NextResponse.redirect(new URL('/settings?drive_error=' + encodeURIComponent(`토큰 교환 실패: ${err.message}`), request.url));
+    return NextResponse.redirect(`${baseUrl}/settings?drive_error=${encodeURIComponent(`토큰 교환 실패: ${err.message}`)}`);
   }
 }
