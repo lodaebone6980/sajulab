@@ -73,9 +73,19 @@ export async function PATCH(
       return NextResponse.json({ message: '추가답변이 저장되었습니다.' });
     }
 
-    // 재분석
+    // 재분석 (비동기 fire-and-forget)
     if (action === 'reanalyze') {
-      return await runReanalysis(orderId, auth.userId);
+      // 즉시 상태를 analyzing으로 바꾸고 응답 반환
+      updateOrderStatus(orderId, auth.userId, 'analyzing');
+      updateOrderProgress(orderId, auth.userId, 5, '재분석 시작');
+
+      const userId = auth.userId;
+      runReanalysis(orderId, userId).catch(err => {
+        console.error(`[Reanalyze] Order ${orderId} failed:`, err);
+        try { updateOrderStatus(orderId, userId, 'failed'); } catch (_) {}
+      });
+
+      return NextResponse.json({ message: '재분석이 시작되었습니다.' });
     }
 
     // 상태 변경

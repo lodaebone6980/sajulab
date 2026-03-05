@@ -386,6 +386,7 @@ export default function OrdersPage() {
 
   // === 재분석 ===
   const handleReanalyze = async (orderId: number) => {
+    if (!confirm('이 주문을 재분석하시겠습니까?\n기존 분석 결과가 새로 덮어씌워집니다.')) return;
     setReanalyzingId(orderId);
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
@@ -393,11 +394,14 @@ export default function OrdersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reanalyze' }),
       });
-      if (res.ok) {
-        fetchOrders();
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || '재분석 요청 실패');
       }
+      fetchOrders();
     } catch (err) {
       console.error('Reanalyze failed:', err);
+      alert('재분석 요청 중 오류가 발생했습니다.');
     } finally {
       setReanalyzingId(null);
     }
@@ -757,12 +761,16 @@ export default function OrdersPage() {
                                 {expandedAnswerId === order.id ? <ChevronUp size={12} className="inline ml-0.5" /> : <ChevronDown size={12} className="inline ml-0.5" />}
                               </button>
                             )}
-                            {/* 실패시 재분석 */}
-                            {order.status === 'failed' && (
+                            {/* 재분석 - 실패/완료/분석중(멈춤) 모두 가능 */}
+                            {['failed', 'completed', 'analyzing', 'pdf_generating'].includes(order.status) && (
                               <button
                                 onClick={() => handleReanalyze(order.id)}
                                 disabled={reanalyzingId === order.id}
-                                className="px-2 py-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded transition-colors disabled:opacity-50"
+                                className={`px-2 py-1 text-xs font-medium rounded transition-colors disabled:opacity-50 ${
+                                  order.status === 'failed'
+                                    ? 'text-red-600 bg-red-50 hover:bg-red-100'
+                                    : 'text-orange-600 bg-orange-50 hover:bg-orange-100'
+                                }`}
                                 title="재분석"
                               >
                                 <RefreshCw size={12} className={`inline mr-0.5 ${reanalyzingId === order.id ? 'animate-spin' : ''}`} />
@@ -1127,11 +1135,13 @@ export default function OrdersPage() {
                       PDF 보기
                     </a>
                   )}
-                  {(detailOrder.status === 'failed' || detailOrder.status === 'pending') && (
+                  {['failed', 'pending', 'completed', 'analyzing', 'pdf_generating'].includes(detailOrder.status) && (
                     <button
                       onClick={() => { handleReanalyze(detailOrder.id); setShowDetailModal(false); }}
-                      className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg"
+                      disabled={reanalyzingId === detailOrder.id}
+                      className="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
                     >
+                      <RefreshCw size={12} className={`inline mr-1 ${reanalyzingId === detailOrder.id ? 'animate-spin' : ''}`} />
                       재분석
                     </button>
                   )}
