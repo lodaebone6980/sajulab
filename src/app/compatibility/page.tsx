@@ -146,18 +146,27 @@ function CustomerSearchModal({
             <div className="text-center py-8 text-gray-500">검색 중...</div>
           ) : customers.length > 0 ? (
             <div className="space-y-2">
-              {customers.map((customer) => (
+              {customers.map((customer: any) => (
                 <button
                   key={customer.id}
                   onClick={() => {
-                    onSelect(customer);
+                    // Normalize snake_case DB fields to camelCase
+                    const normalized: Customer = {
+                      id: customer.id,
+                      name: customer.name,
+                      gender: customer.gender === 'male' ? 'M' : customer.gender === 'female' ? 'F' : customer.gender,
+                      birthDate: customer.birth_date || customer.birthDate || '',
+                      birthTime: customer.birth_time || customer.birthTime || '',
+                      calendarType: customer.calendar_type || customer.calendarType || 'solar',
+                    };
+                    onSelect(normalized);
                     onClose();
                   }}
                   className="w-full text-left p-3 hover:bg-pink-50 rounded-lg border border-gray-200 hover:border-pink-300 transition"
                 >
                   <div className="font-medium text-sm">{customer.name}</div>
                   <div className="text-xs text-gray-600 mt-1">
-                    {customer.gender === 'M' ? '남' : '여'} · {customer.birthDate} · {customer.calendarType === 'solar' ? '양력' : '음력'}
+                    {customer.gender === 'male' || customer.gender === 'M' ? '남' : '여'} · {customer.birth_date || customer.birthDate || ''} · {(customer.calendar_type || customer.calendarType) === 'solar' ? '양력' : '음력'}
                   </div>
                 </button>
               ))}
@@ -263,17 +272,19 @@ function CreateGroupModal({
 
   const handleSelectCustomer = useCallback(
     (index: number, customer: Customer) => {
-      const newMembers = [...members];
-      newMembers[index] = {
-        ...newMembers[index],
-        name: customer.name,
-        gender: customer.gender === 'M' ? 'M' : 'F',
-        birthDate: customer.birthDate,
-        birthTime: customer.birthTime || '',
-        calendarType: customer.calendarType === 'solar' ? 'solar' : 'lunar',
-        customerId: customer.id,
-      };
-      setMembers(newMembers);
+      setMembers(prev => {
+        const newMembers = [...prev];
+        newMembers[index] = {
+          ...newMembers[index],
+          name: customer.name,
+          gender: customer.gender === 'M' ? 'M' : 'F',
+          birthDate: customer.birthDate,
+          birthTime: customer.birthTime || '',
+          calendarType: customer.calendarType === 'solar' ? 'solar' : 'lunar',
+          customerId: customer.id,
+        };
+        return newMembers;
+      });
       setSearchModalOpen(null);
     },
     []
@@ -808,11 +819,11 @@ function GroupCard({
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-gray-900">{member.name}</span>
                 <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
-                  {member.gender === 'M' ? '남' : '여'}
+                  {member.gender === 'M' || member.gender === 'male' ? '남' : '여'}
                 </span>
               </div>
               <div className="text-xs text-gray-600">
-                {member.relation} · {member.birthDate}
+                {(member as any).relation_label || member.relation} · {(member as any).birth_date || member.birthDate}
               </div>
             </div>
           ))}
@@ -925,7 +936,47 @@ export default function CompatibilityPage() {
       const response = await fetch('/api/compatibility');
       if (!response.ok) throw new Error('데이터 로드 실패');
       const result = await response.json();
-      setData(result);
+
+      // Normalize snake_case DB fields to camelCase
+      const normalizedGroups = (result.groups || []).map((g: any) => ({
+        id: String(g.id),
+        name: g.group_name || g.name || '',
+        type: g.group_type || g.type || 'other',
+        createdAt: g.created_at || g.createdAt || '',
+        updatedAt: g.updated_at || g.updatedAt || '',
+        members: (g.members || []).map((m: any) => ({
+          name: m.name || '',
+          gender: m.gender === 'male' ? 'M' : m.gender === 'female' ? 'F' : m.gender || 'M',
+          birthDate: m.birth_date || m.birthDate || '',
+          birthTime: m.birth_time || m.birthTime || '',
+          calendarType: m.calendar_type || m.calendarType || 'solar',
+          relation: m.relation_label || m.relation || '',
+          customerId: String(m.customer_id || m.customerId || ''),
+        })),
+        pairs: (g.results || []).map((r: any) => ({
+          id: String(r.id),
+          person1Name: r.person1_name || r.person1Name || '',
+          person2Name: r.person2_name || r.person2Name || '',
+          relationLabel: r.relation_label || r.relationLabel || '',
+          score: r.score || undefined,
+          grade: r.grade || '',
+          status: r.status || 'pending',
+          result_text: r.result_text || '',
+        })),
+      }));
+
+      const normalizedStandalone = (result.standalone || []).map((r: any) => ({
+        id: String(r.id),
+        person1Name: r.person1_name || r.person1Name || '',
+        person2Name: r.person2_name || r.person2Name || '',
+        relationLabel: r.relation_label || r.relationLabel || '',
+        score: r.score || undefined,
+        grade: r.grade || '',
+        status: r.status || 'pending',
+        result_text: r.result_text || '',
+      }));
+
+      setData({ groups: normalizedGroups, standalone: normalizedStandalone });
     } catch (err) {
       setError(err instanceof Error ? err.message : '오류가 발생했습니다');
     } finally {
@@ -948,7 +999,10 @@ export default function CompatibilityPage() {
             action: 'create_group',
             groupName: groupData.groupName,
             groupType: groupData.groupType,
-            members: groupData.members,
+            members: groupData.members.map(m => ({
+              ...m,
+              gender: m.gender === 'M' ? 'male' : m.gender === 'F' ? 'female' : m.gender,
+            })),
           }),
         });
 
@@ -970,8 +1024,8 @@ export default function CompatibilityPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'create_pair',
-            person1: pairData.person1,
-            person2: pairData.person2,
+            person1: { ...pairData.person1, gender: pairData.person1.gender === 'M' ? 'male' : pairData.person1.gender === 'F' ? 'female' : pairData.person1.gender },
+            person2: { ...pairData.person2, gender: pairData.person2.gender === 'M' ? 'male' : pairData.person2.gender === 'F' ? 'female' : pairData.person2.gender },
             relationLabel: pairData.relationLabel,
           }),
         });
@@ -1044,7 +1098,7 @@ export default function CompatibilityPage() {
           body: JSON.stringify({
             action: 'add_member',
             groupId: pendingAddMember.groupId,
-            member,
+            member: { ...member, gender: member.gender === 'M' ? 'male' : member.gender === 'F' ? 'female' : member.gender },
           }),
         });
 
