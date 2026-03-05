@@ -628,8 +628,8 @@ export function createConsultation(userId: number, data: {
   );
   return stmt.run(
     userId,
-    data.customer_id || null,
-    data.order_id || null,
+    data.customer_id || 0,
+    data.order_id || 0,
     data.date || new Date().toISOString().split('T')[0],
     data.chat_history || '',
     data.chat_link || '',
