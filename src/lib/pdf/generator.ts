@@ -413,9 +413,15 @@ function renderNarrativeChapter(
   // 구분선
   doc.moveTo(margin, 135).lineTo(width - margin, 135).strokeColor('#e5e7eb').lineWidth(1).stroke();
 
-  // 본문 텍스트 - 긴 텍스트를 여러 페이지에 걸쳐 렌더링 (리터럴 \n 치환)
+  // 본문 텍스트 - 긴 텍스트를 여러 페이지에 걸쳐 렌더링 (리터럴 \n 치환 + JSON 아티팩트 제거)
   let y = 155;
-  const cleanContent = chapter.content.replace(/\\n/g, '\n').replace(/\\t/g, ' ').replace(/\\r/g, '');
+  let cleanContent = chapter.content.replace(/\\n/g, '\n').replace(/\\t/g, ' ').replace(/\\r/g, '');
+  cleanContent = cleanContent
+    .replace(/```(?:json|javascript|typescript|code)?\s*\n?([\s\S]*?)\n?```/g, '$1')
+    .replace(/^\s*[\{\}\[\]]\s*$/gm, '')
+    .replace(/^\s*"[a-zA-Z_]+"\s*:\s*".*"[,]?\s*$/gm, '')
+    .replace(/^"?(title|content|number|text|chapter)"?\s*:\s*"?/gmi, '')
+    .replace(/\n{3,}/g, '\n\n');
   const paragraphs = cleanContent.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
@@ -536,9 +542,15 @@ function renderGreetingPageLarge(
   // 장식선
   doc.rect(width / 2 - 25, 100, 50, 2).fill('#d4af37');
 
-  // 인사말 본문 (리터럴 \n 치환)
+  // 인사말 본문 (리터럴 \n 치환 + JSON 아티팩트 제거)
   let y = 130;
-  const cleanGreeting = greeting.replace(/\\n/g, '\n').replace(/\\t/g, ' ').replace(/\\r/g, '');
+  let cleanGreeting = greeting.replace(/\\n/g, '\n').replace(/\\t/g, ' ').replace(/\\r/g, '');
+  cleanGreeting = cleanGreeting
+    .replace(/```(?:json|javascript|typescript|code)?\s*\n?([\s\S]*?)\n?```/g, '$1')
+    .replace(/^\s*[\{\}\[\]]\s*$/gm, '')
+    .replace(/^\s*"[a-zA-Z_]+"\s*:\s*".*"[,]?\s*$/gm, '')
+    .replace(/^"?(title|content|number|text|greeting)"?\s*:\s*"?/gmi, '')
+    .replace(/\n{3,}/g, '\n\n');
   const paragraphs = cleanGreeting.split('\n').filter(p => p.trim());
 
   for (const para of paragraphs) {
@@ -618,11 +630,20 @@ function renderNarrativeChapterLarge(
 
   let y = 130;
 
-  // 리터럴 \n 문자열을 실제 줄바꿈으로 치환
-  const cleanContent = chapter.content
+  // 리터럴 \n 문자열을 실제 줄바꿈으로 치환 + JSON 아티팩트 제거
+  let cleanContent = chapter.content
     .replace(/\\n/g, '\n')        // 리터럴 \n → 실제 줄바꿈
     .replace(/\\t/g, ' ')         // 리터럴 \t → 공백
     .replace(/\\r/g, '');         // 리터럴 \r 제거
+
+  // JSON/코드 아티팩트 정리
+  cleanContent = cleanContent
+    .replace(/```(?:json|javascript|typescript|code)?\s*\n?([\s\S]*?)\n?```/g, '$1')  // 코드블록 제거
+    .replace(/^\s*[\{\}\[\]]\s*$/gm, '')                   // 줄 전체가 { } [ ] 인 경우 제거
+    .replace(/^\s*"[a-zA-Z_]+"\s*:\s*".*"[,]?\s*$/gm, '') // "key": "value" 패턴 제거
+    .replace(/^"?(title|content|number|text|chapter)"?\s*:\s*"?/gmi, '')  // JSON 필드명 제거
+    .replace(/\n{3,}/g, '\n\n');                           // 연속 빈줄 정리
+
   const paragraphs = cleanContent.split('\n');
 
   for (const para of paragraphs) {
@@ -906,23 +927,23 @@ function renderTenGodDistribution(
     doc.roundedRect(margin, cardY, contentW, cardH, 8).fill('#ffffff');
     doc.roundedRect(margin, cardY, contentW, cardH, 8).strokeColor('#e8e5de').stroke();
 
-    // 한자 원형 아이콘 (큰 사이즈)
-    doc.circle(margin + 35, cardY + cardH / 2, 22).strokeColor(g.color).lineWidth(2).stroke();
+    // 한자 원형 아이콘 (세로 중앙 정렬)
+    const cardCenterY = cardY + cardH / 2;
+    doc.circle(margin + 35, cardCenterY, 22).strokeColor(g.color).lineWidth(2).stroke();
     doc.font(koreanBoldFont).fontSize(20).fillColor(g.color);
-    const iconTextY = cardY + cardH / 2 - 20 * 0.45;
-    doc.text(g.icon, margin + 15, iconTextY, { width: 40, align: 'center' });
+    doc.text(g.icon, margin + 15, cardCenterY - 10, { width: 40, align: 'center' });
 
-    // 이름 + 설명
+    // 이름 + 설명 (세로 중앙 정렬)
     doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
-    doc.text(g.name, margin + 72, cardY + 16, { width: contentW - 150 });
+    doc.text(g.name, margin + 72, cardCenterY - 18, { width: contentW - 150 });
     doc.font(koreanFont).fontSize(9.5).fillColor('#6b7280');
-    doc.text(g.desc, margin + 72, cardY + 38, { width: contentW - 150, lineGap: 3 });
+    doc.text(g.desc, margin + 72, cardCenterY + 2, { width: contentW - 150, lineGap: 3 });
 
-    // 개수 (오른쪽, 크게)
+    // 개수 (오른쪽, 세로 중앙 정렬)
     doc.font(koreanBoldFont).fontSize(28).fillColor(g.color);
-    doc.text(`${count}`, margin + contentW - 60, cardY + 16, { width: 44, align: 'right' });
+    doc.text(`${count}`, margin + contentW - 60, cardCenterY - 16, { width: 44, align: 'right' });
     doc.font(koreanFont).fontSize(11).fillColor('#6b7280');
-    doc.text('개', margin + contentW - 14, cardY + 26);
+    doc.text('개', margin + contentW - 14, cardCenterY - 6);
   }
 }
 

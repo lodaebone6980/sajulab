@@ -179,10 +179,37 @@ async function reviewAndRefine(
     // **굵은체** 제거
     content = content.replace(/\*\*(.*?)\*\*/g, '$1');
 
-    // 3. 연속 빈 줄 정리 (3줄 이상 → 2줄로)
+    // 3. JSON/코드 아티팩트 제거
+    // GPT가 JSON 형식으로 응답한 경우 본문만 추출
+    if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+      try {
+        const parsed = JSON.parse(content);
+        // { content: "..." } 또는 { title: "...", content: "..." } 형태
+        if (parsed.content && typeof parsed.content === 'string') {
+          content = parsed.content;
+        } else if (parsed.text && typeof parsed.text === 'string') {
+          content = parsed.text;
+        }
+      } catch {
+        // JSON 파싱 실패 시 무시
+      }
+    }
+
+    // JSON 필드 패턴 제거: "title": "...", "content": "...", "number": "..." 등
+    content = content.replace(/^"?(title|content|number|text|chapter|greeting|chapters)"?\s*:\s*"?/gmi, '');
+    // 줄 시작의 { 또는 } 제거 (JSON 구조체 잔여물)
+    content = content.replace(/^\s*[\{\}]\s*$/gm, '');
+    // "key": "value" 패턴의 JSON 필드 제거 (줄 전체가 JSON 필드인 경우)
+    content = content.replace(/^\s*"[a-zA-Z_]+"\s*:\s*".*"[,]?\s*$/gm, '');
+    // 줄 시작/끝의 [ ] (JSON 배열 잔여물) 제거
+    content = content.replace(/^\s*[\[\]]\s*$/gm, '');
+    // ```json ... ``` 코드 블록 제거
+    content = content.replace(/```(?:json|javascript|typescript|code)?\s*\n?([\s\S]*?)\n?```/g, '$1');
+
+    // 4. 연속 빈 줄 정리 (3줄 이상 → 2줄로)
     content = content.replace(/\n{3,}/g, '\n\n');
 
-    // 4. 챕터 제목이 본문 시작에 포함된 경우 제거
+    // 5. 챕터 제목이 본문 시작에 포함된 경우 제거
     const titlePattern = new RegExp(`^\\[?${ch.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?\\s*\n`, 'i');
     content = content.replace(titlePattern, '');
 
