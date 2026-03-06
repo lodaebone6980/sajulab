@@ -898,23 +898,25 @@ function renderTenGodDistribution(
     doc.roundedRect(margin, cardY, contentW, cardH, 8).fill('#ffffff');
     doc.roundedRect(margin, cardY, contentW, cardH, 8).strokeColor('#e8e5de').stroke();
 
-    // 한자 원형 아이콘 (세로 중앙 정렬)
+    // 한자 원형 아이콘 (세로 중앙 정렬 - getCenteredTextY 사용)
     const cardCenterY = cardY + cardH / 2;
     doc.circle(margin + 35, cardCenterY, 22).strokeColor(g.color).lineWidth(2).stroke();
     doc.font(koreanBoldFont).fontSize(20).fillColor(g.color);
-    doc.text(g.icon, margin + 15, cardCenterY - 10, { width: 40, align: 'center' });
+    doc.text(g.icon, margin + 15, getCenteredTextY(cardY, cardH, 20), { width: 40, align: 'center' });
 
-    // 이름 + 설명 (세로 중앙 정렬)
+    // 이름 + 설명 (상단 1/3 + 하단 2/3 영역에 배치)
+    const nameY = cardY + cardH * 0.18;
+    const descY = cardY + cardH * 0.52;
     doc.font(koreanBoldFont).fontSize(14).fillColor('#1f2937');
-    doc.text(g.name, margin + 72, cardCenterY - 18, { width: contentW - 150 });
+    doc.text(g.name, margin + 72, nameY, { width: contentW - 150 });
     doc.font(koreanFont).fontSize(9.5).fillColor('#6b7280');
-    doc.text(g.desc, margin + 72, cardCenterY + 2, { width: contentW - 150, lineGap: 3 });
+    doc.text(g.desc, margin + 72, descY, { width: contentW - 150, lineGap: 3 });
 
     // 개수 (오른쪽, 세로 중앙 정렬)
     doc.font(koreanBoldFont).fontSize(28).fillColor(g.color);
-    doc.text(`${count}`, margin + contentW - 60, cardCenterY - 16, { width: 44, align: 'right' });
+    doc.text(`${count}`, margin + contentW - 60, getCenteredTextY(cardY, cardH, 28), { width: 44, align: 'right' });
     doc.font(koreanFont).fontSize(11).fillColor('#6b7280');
-    doc.text('개', margin + contentW - 14, cardCenterY - 6);
+    doc.text('개', margin + contentW - 14, getCenteredTextY(cardY, cardH, 11));
   }
 }
 
@@ -1712,11 +1714,11 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   // 용신/희신/기신/구신/한신 배지
   const ys = result.yongShinSystem;
   const gods = [
-    { label: '용신', value: result.yongSin },
-    { label: '희신', value: ys?.huiSin || '화' },
-    { label: '기신', value: result.giSin },
-    { label: '구신', value: ys?.guSin || '수' },
-    { label: '한신', value: ys?.hanSin || '금' },
+    { label: '용신', value: result.yongSin, stem: ys?.stems?.yongSin, yy: ys?.yinYang?.yongSin },
+    { label: '희신', value: ys?.huiSin || '화', stem: ys?.stems?.huiSin, yy: ys?.yinYang?.huiSin },
+    { label: '기신', value: result.giSin, stem: ys?.stems?.giSin, yy: ys?.yinYang?.giSin },
+    { label: '구신', value: ys?.guSin || '수', stem: ys?.stems?.guSin, yy: ys?.yinYang?.guSin },
+    { label: '한신', value: ys?.hanSin || '금', stem: ys?.stems?.hanSin, yy: ys?.yinYang?.hanSin },
   ];
   const badgeStartX = tableX + 140;
   const badgeW = 58;
@@ -1728,9 +1730,13 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     doc.roundedRect(bx, ty + 12, badgeW, 48, 6).strokeColor('#e5e2dd').stroke();
     doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
     doc.text(g.label, bx, ty + 16, { width: badgeW, align: 'center' });
-    doc.font(hanjaBoldFont).fontSize(18).fillColor(elColor);
-    const badgeCenterY = getCenteredTextY(ty + 12, 48, 18);
-    doc.text(ELEMENT_HANJA[g.value] || g.value, bx, badgeCenterY, { width: badgeW, align: 'center' });
+    // 천간 + 한자 오행
+    const stemStr = g.stem || '';
+    doc.font(hanjaBoldFont).fontSize(16).fillColor(elColor);
+    doc.text(`${stemStr}${ELEMENT_HANJA[g.value] || g.value}`, bx, ty + 28, { width: badgeW, align: 'center' });
+    // 음양 + 오행 한글
+    doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
+    doc.text(`${g.yy || ''}${g.value}`, bx, ty + 48, { width: badgeW, align: 'center' });
   }
 }
 
@@ -2122,23 +2128,29 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
     y += 20;
 
     const items = [
-      { label: '용신', sub: '用神', value: ys.yongSin },
-      { label: '희신', sub: '喜神', value: ys.huiSin },
-      { label: '한신', sub: '閑神', value: ys.hanSin },
-      { label: '구신', sub: '仇神', value: ys.guSin },
-      { label: '기신', sub: '忌神', value: ys.giSin },
+      { label: '용신', sub: '用神', value: ys.yongSin, yy: ys.yinYang?.yongSin, stem: ys.stems?.yongSin },
+      { label: '희신', sub: '喜神', value: ys.huiSin, yy: ys.yinYang?.huiSin, stem: ys.stems?.huiSin },
+      { label: '한신', sub: '閑神', value: ys.hanSin, yy: ys.yinYang?.hanSin, stem: ys.stems?.hanSin },
+      { label: '구신', sub: '仇神', value: ys.guSin, yy: ys.yinYang?.guSin, stem: ys.stems?.guSin },
+      { label: '기신', sub: '忌神', value: ys.giSin, yy: ys.yinYang?.giSin, stem: ys.stems?.giSin },
     ];
     const cellW = (width - 120) / 5;
     for (let i = 0; i < 5; i++) {
       const cx = 60 + i * cellW;
       const color = ELEMENT_COLORS[items[i].value] || '#6b7280';
-      doc.roundedRect(cx + 2, y, cellW - 4, 50, 6).fill('#f8fafc');
+      doc.roundedRect(cx + 2, y, cellW - 4, 58, 6).fill('#f8fafc');
       doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
       doc.text(`${items[i].label}(${items[i].sub})`, cx + 2, y + 6, { width: cellW - 4, align: 'center' });
+      // 천간 + 오행 한자 표시
+      const stemStr = items[i].stem || '';
       doc.font(hanjaBoldFont).fontSize(16).fillColor(color);
-      doc.text(`${ELEMENT_HANJA[items[i].value]}${items[i].value}`, cx + 2, y + 24, { width: cellW - 4, align: 'center' });
+      doc.text(`${stemStr}${ELEMENT_HANJA[items[i].value]}`, cx + 2, y + 22, { width: cellW - 4, align: 'center' });
+      // 음양 + 오행 한글 표시
+      const yyStr = items[i].yy || '';
+      doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
+      doc.text(`${yyStr}${items[i].value}`, cx + 2, y + 42, { width: cellW - 4, align: 'center' });
     }
-    y += 68;
+    y += 76;
   }
 
   // 십이운성

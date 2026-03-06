@@ -32,6 +32,22 @@ export interface YongShinSystem {
   guSin: FiveElementKo;
   /** 한신 - 영향 적은 오행 */
   hanSin: FiveElementKo;
+  /** 각 신의 음양 (양=true, 음=false) */
+  yinYang: {
+    yongSin: '양' | '음';
+    huiSin: '양' | '음';
+    giSin: '양' | '음';
+    guSin: '양' | '음';
+    hanSin: '양' | '음';
+  };
+  /** 각 신의 천간 (甲乙丙丁戊己庚辛壬癸) */
+  stems: {
+    yongSin: string;
+    huiSin: string;
+    giSin: string;
+    guSin: string;
+    hanSin: string;
+  };
   /** 판정 근거 설명 */
   reason: string;
   /** 격국 유형 */
@@ -91,6 +107,18 @@ const SEASON_JOHU: Record<string, FiveElementKo> = {
 
 const ELEMENT_ORDER: FiveElementKo[] = ['목', '화', '토', '금', '수'];
 
+// 천간 음양 매핑: 오행 + 음양 → 천간
+const ELEMENT_TO_STEM: Record<FiveElementKo, { yang: string; yin: string }> = {
+  '목': { yang: '甲', yin: '乙' },
+  '화': { yang: '丙', yin: '丁' },
+  '토': { yang: '戊', yin: '己' },
+  '금': { yang: '庚', yin: '辛' },
+  '수': { yang: '壬', yin: '癸' },
+};
+
+// 양 천간
+const YANG_STEMS = ['甲', '丙', '戊', '庚', '壬'];
+
 function distToArray(dist: ElementDistribution): number[] {
   return [dist.wood, dist.fire, dist.earth, dist.metal, dist.water];
 }
@@ -119,6 +147,7 @@ export function determineYongShinSystem(
   dayStemElement: FiveElementKo,
   dist: ElementDistribution,
   strength: StrengthResult,
+  dayStem?: string, // 일간 천간 (甲~癸)
 ): YongShinSystem {
   // 1. 종격 판정 (한 오행이 6개 이상이면 전왕격)
   const values = distToArray(dist);
@@ -126,20 +155,23 @@ export function determineYongShinSystem(
   const maxVal = Math.max(...values);
   const maxIndex = values.indexOf(maxVal);
 
+  // 일간의 음양 판별
+  const isDayStemYang = dayStem ? YANG_STEMS.includes(dayStem) : true;
+
   if (maxVal >= 6 && maxVal >= total * 0.7) {
-    return determineJeonWang(dayStemElement, dist, ELEMENT_ORDER[maxIndex]);
+    return determineJeonWang(dayStemElement, dist, ELEMENT_ORDER[maxIndex], isDayStemYang);
   }
 
   // 2. 통관용신 판정 (두 오행이 강하게 대립)
-  const tongGwan = checkTongGwan(dayStemElement, dist);
+  const tongGwan = checkTongGwan(dayStemElement, dist, isDayStemYang);
   if (tongGwan) return tongGwan;
 
   // 3. 조후용신 판정 (계절 편중이 극심)
-  const johu = checkJohu(dayStemElement, dist, strength);
+  const johu = checkJohu(dayStemElement, dist, strength, isDayStemYang);
   if (johu) return johu;
 
   // 4. 기본: 억부용신 (신강/신약 기반)
-  return determineEokBu(dayStemElement, dist, strength);
+  return determineEokBu(dayStemElement, dist, strength, isDayStemYang);
 }
 
 // ══════════════════════════════════════════════
@@ -150,6 +182,7 @@ function determineEokBu(
   dayStemElement: FiveElementKo,
   dist: ElementDistribution,
   strength: StrengthResult,
+  isDayStemYang: boolean = true,
 ): YongShinSystem {
   let yongSin: FiveElementKo;
   let reason: string;
@@ -198,7 +231,7 @@ function determineEokBu(
     reason = `중화 → ${yongSin}(가장 부족한 오행)으로 균형 보완`;
   }
 
-  return buildSystem(dayStemElement, yongSin, '억부용신', reason);
+  return buildSystem(dayStemElement, yongSin, '억부용신', reason, isDayStemYang);
 }
 
 // ══════════════════════════════════════════════
@@ -208,6 +241,7 @@ function determineEokBu(
 function checkTongGwan(
   dayStemElement: FiveElementKo,
   dist: ElementDistribution,
+  isDayStemYang: boolean = true,
 ): YongShinSystem | null {
   const values = distToArray(dist);
   const total = values.reduce((a, b) => a + b, 0);
@@ -242,6 +276,7 @@ function checkTongGwan(
             return buildSystem(
               dayStemElement, tongGwanEl, '통관용신',
               `${el1}(${values[i]}개)↔${el2}(${values[j]}개) 대립 → ${tongGwanEl}으로 통관`,
+              isDayStemYang,
             );
           }
         }
@@ -259,6 +294,7 @@ function checkJohu(
   dayStemElement: FiveElementKo,
   dist: ElementDistribution,
   strength: StrengthResult,
+  isDayStemYang: boolean = true,
 ): YongShinSystem | null {
   const season = strength.deukryeong.state; // '왕' | '상' | '휴' | '수' | '사'
 
@@ -271,6 +307,7 @@ function checkJohu(
       return buildSystem(
         dayStemElement, monthElement, '조후용신',
         `${season} 계절 편향(득령 ${strength.deukryeong.score}점) → ${monthElement}으로 조후 조절`,
+        isDayStemYang,
       );
     }
   }
@@ -300,6 +337,7 @@ function determineJeonWang(
   dayStemElement: FiveElementKo,
   dist: ElementDistribution,
   dominantElement: FiveElementKo,
+  isDayStemYang: boolean = true,
 ): YongShinSystem {
   // 종격: 압도적으로 강한 오행을 따라감
   // 용신 = 가장 강한 오행 자체 (거스르지 않음)
@@ -308,6 +346,7 @@ function determineJeonWang(
   return buildSystem(
     dayStemElement, yongSin, '전왕용신',
     `${dominantElement}이(가) ${getElementCount(dist, dominantElement)}개로 압도적 → 종${dominantElement}격, 순응`,
+    isDayStemYang,
   );
 }
 
@@ -320,6 +359,7 @@ function buildSystem(
   yongSin: FiveElementKo,
   pattern: YongShinPattern,
   reason: string,
+  isDayStemYang: boolean = true,
 ): YongShinSystem {
   // 희신: 용신을 생하는 오행
   const huiSin = GENERATES_ME[yongSin];
@@ -327,10 +367,21 @@ function buildSystem(
   // 기신: 용신을 극하는 오행
   const giSin = OVERCOMES_ME[yongSin];
 
-  // 구신: 기신을 생하는 오행
-  const guSin = GENERATES_ME[giSin];
+  // 구신: 기신을 생하는 오행 (용신과 같을 수 없음)
+  let guSin = GENERATES_ME[giSin];
 
-  // 한신: 나머지 오행
+  // ─── 검증: 용신·희신·기신·구신은 모두 달라야 함 ───
+  // 오행 상생상극 순환 특성상 겹칠 수 없으나, 안전장치 적용
+  if (guSin === yongSin) {
+    // 구신이 용신과 같으면 → 기신이 극하는 오행으로 대체
+    guSin = I_OVERCOME[giSin];
+  }
+  if (guSin === huiSin) {
+    // 구신이 희신과 같으면 → 다른 오행 선택
+    guSin = I_GENERATE[giSin];
+  }
+
+  // 한신: 나머지 오행 (용신·희신·기신·구신에 속하지 않는 오행)
   const used = new Set([yongSin, huiSin, giSin, guSin]);
   let hanSin: FiveElementKo = '토'; // fallback
   for (const el of ELEMENT_ORDER) {
@@ -340,18 +391,42 @@ function buildSystem(
     }
   }
 
-  // 한신이 없으면 (4개가 모두 다를 수 없는 경우) guSin과 같을 수 있음
-  // 이 경우 한신은 5번째 오행
-  if (used.size < 5) {
+  // ─── 최종 검증: 5신이 모두 서로 다른 오행인지 확인 ───
+  const allFive = [yongSin, huiSin, giSin, guSin, hanSin];
+  const uniqueSet = new Set(allFive);
+  if (uniqueSet.size < 5) {
+    console.warn(`[용신] ⚠ 5신 중복 감지: ${allFive.join(',')} — 자동 보정`);
+    // 누락된 오행을 한신에 할당
     for (const el of ELEMENT_ORDER) {
-      if (!used.has(el)) {
+      if (!new Set([yongSin, huiSin, giSin, guSin]).has(el)) {
         hanSin = el;
         break;
       }
     }
   }
 
-  return { yongSin, huiSin, giSin, guSin, hanSin, reason, pattern };
+  // ─── 음양 결정: 일간 음양 기준으로 각 신의 음양 배정 ───
+  // 전통 사주학: 용신은 일간과 반대 음양 (정(正) 관계 = 보완)
+  // 기신은 일간과 같은 음양 (편(偏) 관계 = 충돌)
+  // 구신은 기신을 돕는 쪽이므로 기신과 반대 음양
+  // 희신은 용신을 돕는 쪽이므로 용신과 반대 음양
+  // 한신은 남은 조합
+  const yongYY: '양' | '음' = isDayStemYang ? '음' : '양'; // 용신: 일간 반대 음양 (정 관계)
+  const huiYY: '양' | '음' = isDayStemYang ? '양' : '음';  // 희신: 일간과 같은 음양
+  const giYY: '양' | '음' = isDayStemYang ? '양' : '음';   // 기신: 일간과 같은 음양 (편 관계)
+  const guYY: '양' | '음' = isDayStemYang ? '음' : '양';   // 구신: 일간 반대 음양
+  const hanYY: '양' | '음' = isDayStemYang ? '양' : '음';  // 한신: 일간과 같은 음양
+
+  const yinYang = { yongSin: yongYY, huiSin: huiYY, giSin: giYY, guSin: guYY, hanSin: hanYY };
+  const stems = {
+    yongSin: ELEMENT_TO_STEM[yongSin][yongYY === '양' ? 'yang' : 'yin'],
+    huiSin: ELEMENT_TO_STEM[huiSin][huiYY === '양' ? 'yang' : 'yin'],
+    giSin: ELEMENT_TO_STEM[giSin][giYY === '양' ? 'yang' : 'yin'],
+    guSin: ELEMENT_TO_STEM[guSin][guYY === '양' ? 'yang' : 'yin'],
+    hanSin: ELEMENT_TO_STEM[hanSin][hanYY === '양' ? 'yang' : 'yin'],
+  };
+
+  return { yongSin, huiSin, giSin, guSin, hanSin, yinYang, stems, reason, pattern };
 }
 
 // ══════════════════════════════════════════════

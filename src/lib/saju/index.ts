@@ -114,7 +114,7 @@ export function analyzeSaju(birthInfo: BirthInfo): SajuResult {
 
   // 용신 5체계
   const yongShinSystem = determineYongShinSystem(
-    dayStemElement, elementDistribution, strength,
+    dayStemElement, elementDistribution, strength, dP.heavenlyStem,
   );
 
   // 십이운성
