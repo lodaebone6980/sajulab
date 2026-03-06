@@ -624,6 +624,9 @@ function renderNarrativeChapterLarge(
   // 챕터 번호 + 타이틀 (본문 시작 전)
   doc.font(koreanFont).fontSize(9).fillColor('#9ca3af');
   doc.text(`CHAPTER ${chapter.number}`, margin, 55);
+  // 버전 마커 (배포 확인용) - 확인 후 제거
+  doc.font(koreanFont).fontSize(6).fillColor('#cccccc');
+  doc.text('v6', width - margin - 10, 55);
   doc.font(koreanBoldFont).fontSize(20).fillColor('#1f2937');
   doc.text(chapter.title, margin, 75);
   doc.moveTo(margin, 105).lineTo(width - margin, 105).strokeColor('#e5e7eb').lineWidth(1).stroke();
