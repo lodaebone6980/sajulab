@@ -105,12 +105,12 @@ export async function PATCH(
         }
 
         // 사주 결과 로드
-        if (!order.result) {
+        if (!order.result_json) {
           updateOrderStatus(orderId, auth.userId, 'failed');
           return NextResponse.json({ error: '저장된 분석 결과가 없습니다.' }, { status: 400 });
         }
 
-        const sajuResult = JSON.parse(order.result);
+        const sajuResult = JSON.parse(order.result_json);
         const narrative = {
           greeting: cachedNarrative.greeting,
           chapters: JSON.parse(cachedNarrative.chapters_json),
