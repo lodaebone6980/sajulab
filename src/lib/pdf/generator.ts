@@ -1711,14 +1711,14 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
   doc.text('오행의 조화와 균형', tableX + 16, ty + 30);
 
-  // 용신/희신/기신/구신/한신 배지
+  // 용신/희신/기신/구신/한신 배지 (오행만 표시)
   const ys = result.yongShinSystem;
   const gods = [
-    { label: '용신', value: result.yongSin, stem: ys?.stems?.yongSin, yy: ys?.yinYang?.yongSin },
-    { label: '희신', value: ys?.huiSin || '화', stem: ys?.stems?.huiSin, yy: ys?.yinYang?.huiSin },
-    { label: '기신', value: result.giSin, stem: ys?.stems?.giSin, yy: ys?.yinYang?.giSin },
-    { label: '구신', value: ys?.guSin || '수', stem: ys?.stems?.guSin, yy: ys?.yinYang?.guSin },
-    { label: '한신', value: ys?.hanSin || '금', stem: ys?.stems?.hanSin, yy: ys?.yinYang?.hanSin },
+    { label: '용신', value: result.yongSin },
+    { label: '희신', value: ys?.huiSin || '화' },
+    { label: '기신', value: result.giSin },
+    { label: '구신', value: ys?.guSin || '수' },
+    { label: '한신', value: ys?.hanSin || '금' },
   ];
   const badgeStartX = tableX + 140;
   const badgeW = 58;
@@ -1730,13 +1730,12 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
     doc.roundedRect(bx, ty + 12, badgeW, 48, 6).strokeColor('#e5e2dd').stroke();
     doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
     doc.text(g.label, bx, ty + 16, { width: badgeW, align: 'center' });
-    // 천간 + 한자 오행
-    const stemStr = g.stem || '';
-    doc.font(hanjaBoldFont).fontSize(16).fillColor(elColor);
-    doc.text(`${stemStr}${ELEMENT_HANJA[g.value] || g.value}`, bx, ty + 28, { width: badgeW, align: 'center' });
-    // 음양 + 오행 한글
+    // 오행 한자
+    doc.font(hanjaBoldFont).fontSize(18).fillColor(elColor);
+    doc.text(ELEMENT_HANJA[g.value] || g.value, bx, ty + 28, { width: badgeW, align: 'center' });
+    // 오행 한글
     doc.font(koreanFont).fontSize(7).fillColor('#9ca3af');
-    doc.text(`${g.yy || ''}${g.value}`, bx, ty + 48, { width: badgeW, align: 'center' });
+    doc.text(g.value, bx, ty + 48, { width: badgeW, align: 'center' });
   }
 }
 
@@ -2128,29 +2127,27 @@ function renderExtendedAnalysis(doc: PDFKit.PDFDocument, result: SajuResult, kor
     y += 20;
 
     const items = [
-      { label: '용신', sub: '用神', value: ys.yongSin, yy: ys.yinYang?.yongSin, stem: ys.stems?.yongSin },
-      { label: '희신', sub: '喜神', value: ys.huiSin, yy: ys.yinYang?.huiSin, stem: ys.stems?.huiSin },
-      { label: '한신', sub: '閑神', value: ys.hanSin, yy: ys.yinYang?.hanSin, stem: ys.stems?.hanSin },
-      { label: '구신', sub: '仇神', value: ys.guSin, yy: ys.yinYang?.guSin, stem: ys.stems?.guSin },
-      { label: '기신', sub: '忌神', value: ys.giSin, yy: ys.yinYang?.giSin, stem: ys.stems?.giSin },
+      { label: '용신', sub: '用神', value: ys.yongSin },
+      { label: '희신', sub: '喜神', value: ys.huiSin },
+      { label: '한신', sub: '閑神', value: ys.hanSin },
+      { label: '구신', sub: '仇神', value: ys.guSin },
+      { label: '기신', sub: '忌神', value: ys.giSin },
     ];
     const cellW = (width - 120) / 5;
     for (let i = 0; i < 5; i++) {
       const cx = 60 + i * cellW;
       const color = ELEMENT_COLORS[items[i].value] || '#6b7280';
-      doc.roundedRect(cx + 2, y, cellW - 4, 58, 6).fill('#f8fafc');
+      doc.roundedRect(cx + 2, y, cellW - 4, 52, 6).fill('#f8fafc');
       doc.font(koreanFont).fontSize(8).fillColor('#6b7280');
       doc.text(`${items[i].label}(${items[i].sub})`, cx + 2, y + 6, { width: cellW - 4, align: 'center' });
-      // 천간 + 오행 한자 표시
-      const stemStr = items[i].stem || '';
-      doc.font(hanjaBoldFont).fontSize(16).fillColor(color);
-      doc.text(`${stemStr}${ELEMENT_HANJA[items[i].value]}`, cx + 2, y + 22, { width: cellW - 4, align: 'center' });
-      // 음양 + 오행 한글 표시
-      const yyStr = items[i].yy || '';
+      // 오행 한자 표시
+      doc.font(hanjaBoldFont).fontSize(18).fillColor(color);
+      doc.text(ELEMENT_HANJA[items[i].value], cx + 2, y + 20, { width: cellW - 4, align: 'center' });
+      // 오행 한글 표시
       doc.font(koreanFont).fontSize(9).fillColor('#6b7280');
-      doc.text(`${yyStr}${items[i].value}`, cx + 2, y + 42, { width: cellW - 4, align: 'center' });
+      doc.text(items[i].value, cx + 2, y + 40, { width: cellW - 4, align: 'center' });
     }
-    y += 76;
+    y += 68;
   }
 
   // 십이운성

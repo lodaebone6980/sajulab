@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
-import { Bell, Coins, TrendingUp, Clock, ClipboardList } from 'lucide-react';
+import { Bell, Coins, TrendingUp, Clock, ClipboardList, Cpu, Zap, DollarSign } from 'lucide-react';
 
 interface DashboardStats {
   points: number;
@@ -26,12 +26,25 @@ interface DashboardStats {
   }>;
 }
 
+interface OpenAIUsageStats {
+  total: { total_count: number; total_prompt: number; total_completion: number; total_tokens: number; estimatedCost: number };
+  today: { count: number; prompt: number; completion: number; tokens: number; estimatedCost: number };
+  thisMonth: { count: number; prompt: number; completion: number; tokens: number; estimatedCost: number };
+  recent: Array<{
+    order_id: number; product_code: string; model: string;
+    prompt_tokens: number; completion_tokens: number; total_tokens: number;
+    created_at: string; customer_name: string | null;
+  }>;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [aiUsage, setAiUsage] = useState<OpenAIUsageStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardStats();
+    fetchAIUsage();
   }, []);
 
   const fetchDashboardStats = async () => {
@@ -46,6 +59,24 @@ export default function DashboardPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchAIUsage = async () => {
+    try {
+      const response = await fetch('/api/admin/openai-usage');
+      if (response.ok) {
+        const data = await response.json();
+        setAiUsage(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch AI usage:', err);
+    }
+  };
+
+  const formatTokens = (n: number) => {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+    return n.toString();
   };
 
   const getStatusBadge = (status: string) => {
@@ -209,6 +240,70 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* OpenAI 사용량 */}
+          {aiUsage && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm mb-6">
+              <div className="p-5 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Cpu size={16} className="text-violet-500" />
+                  <h2 className="text-base font-bold text-gray-900">OpenAI 사용량</h2>
+                  <span className="text-xs text-gray-400 ml-2">gpt-4.1 기준 추정 비용</span>
+                </div>
+              </div>
+              <div className="p-5">
+                <div className="grid grid-cols-3 gap-4 mb-5">
+                  <div className="bg-violet-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap size={14} className="text-violet-500" />
+                      <p className="text-xs text-violet-600 font-medium">오늘</p>
+                    </div>
+                    <p className="text-lg font-bold text-violet-900">{formatTokens(aiUsage.today.tokens)} <span className="text-xs font-normal text-violet-500">tokens</span></p>
+                    <p className="text-xs text-violet-500 mt-1">{aiUsage.today.count}건 · ${aiUsage.today.estimatedCost.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-blue-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp size={14} className="text-blue-500" />
+                      <p className="text-xs text-blue-600 font-medium">이번 달</p>
+                    </div>
+                    <p className="text-lg font-bold text-blue-900">{formatTokens(aiUsage.thisMonth.tokens)} <span className="text-xs font-normal text-blue-500">tokens</span></p>
+                    <p className="text-xs text-blue-500 mt-1">{aiUsage.thisMonth.count}건 · ${aiUsage.thisMonth.estimatedCost.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <DollarSign size={14} className="text-gray-500" />
+                      <p className="text-xs text-gray-600 font-medium">누적 합계</p>
+                    </div>
+                    <p className="text-lg font-bold text-gray-900">{formatTokens(aiUsage.total.total_tokens)} <span className="text-xs font-normal text-gray-500">tokens</span></p>
+                    <p className="text-xs text-gray-500 mt-1">{aiUsage.total.total_count}건 · ${aiUsage.total.estimatedCost.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                {/* 최근 AI 사용 내역 */}
+                {aiUsage.recent.length > 0 && (
+                  <div className="border-t border-gray-100 pt-4">
+                    <p className="text-xs font-medium text-gray-500 mb-3">최근 AI 사용 내역</p>
+                    <div className="space-y-2">
+                      {aiUsage.recent.slice(0, 5).map((r) => (
+                        <div key={r.order_id} className="flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-3">
+                            <span className="text-gray-400 w-8">#{r.order_id}</span>
+                            <span className="text-gray-700">{r.customer_name || '-'}</span>
+                            <span className="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px]">{r.product_code}</span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="text-gray-400">{r.model}</span>
+                            <span className="text-violet-600 font-medium w-16 text-right">{formatTokens(r.total_tokens)}</span>
+                            <span className="text-gray-400 w-20 text-right">{new Date(r.created_at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 최근 작업 */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm">

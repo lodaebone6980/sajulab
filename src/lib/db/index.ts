@@ -1379,6 +1379,71 @@ export function getNarrative(orderId: number) {
   } | undefined;
 }
 
+// ============ OpenAI 사용량 통계 ============
+export function getTokenUsageStats() {
+  const db = getDb();
+
+  // 전체 합계
+  const total = db.prepare(`
+    SELECT
+      COUNT(*) as total_count,
+      COALESCE(SUM(prompt_tokens), 0) as total_prompt,
+      COALESCE(SUM(completion_tokens), 0) as total_completion,
+      COALESCE(SUM(prompt_tokens + completion_tokens), 0) as total_tokens
+    FROM saju_narratives
+  `).get() as { total_count: number; total_prompt: number; total_completion: number; total_tokens: number };
+
+  // 오늘 사용량
+  const today = db.prepare(`
+    SELECT
+      COUNT(*) as count,
+      COALESCE(SUM(prompt_tokens), 0) as prompt,
+      COALESCE(SUM(completion_tokens), 0) as completion,
+      COALESCE(SUM(prompt_tokens + completion_tokens), 0) as tokens
+    FROM saju_narratives
+    WHERE DATE(created_at) = DATE('now')
+  `).get() as { count: number; prompt: number; completion: number; tokens: number };
+
+  // 이번 달 사용량
+  const thisMonth = db.prepare(`
+    SELECT
+      COUNT(*) as count,
+      COALESCE(SUM(prompt_tokens), 0) as prompt,
+      COALESCE(SUM(completion_tokens), 0) as completion,
+      COALESCE(SUM(prompt_tokens + completion_tokens), 0) as tokens
+    FROM saju_narratives
+    WHERE strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
+  `).get() as { count: number; prompt: number; completion: number; tokens: number };
+
+  // 최근 10건 상세
+  const recent = db.prepare(`
+    SELECT n.order_id, n.product_code, n.model, n.prompt_tokens, n.completion_tokens,
+           (n.prompt_tokens + n.completion_tokens) as total_tokens, n.created_at,
+           c.name as customer_name
+    FROM saju_narratives n
+    LEFT JOIN orders o ON n.order_id = o.id
+    LEFT JOIN customers c ON o.customer_id = c.id
+    ORDER BY n.created_at DESC
+    LIMIT 10
+  `).all() as Array<{
+    order_id: number; product_code: string; model: string;
+    prompt_tokens: number; completion_tokens: number; total_tokens: number;
+    created_at: string; customer_name: string | null;
+  }>;
+
+  // gpt-4.1 기준 대략적 비용 계산 (input: $2/1M, output: $8/1M)
+  const estimatedCost = (total.total_prompt / 1_000_000) * 2 + (total.total_completion / 1_000_000) * 8;
+  const monthCost = (thisMonth.prompt / 1_000_000) * 2 + (thisMonth.completion / 1_000_000) * 8;
+  const todayCost = (today.prompt / 1_000_000) * 2 + (today.completion / 1_000_000) * 8;
+
+  return {
+    total: { ...total, estimatedCost: +estimatedCost.toFixed(4) },
+    today: { ...today, estimatedCost: +todayCost.toFixed(4) },
+    thisMonth: { ...thisMonth, estimatedCost: +monthCost.toFixed(4) },
+    recent,
+  };
+}
+
 // ============ admin 시드 ============
 export async function seedAdminUser() {
   const db = getDb();
