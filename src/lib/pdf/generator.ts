@@ -668,24 +668,17 @@ function renderNarrativeChapterLarge(
       y = doc.y + 18;
     } else if (isMonthHeader) {
       y += 20;
-      if (y > pageBottom) { doc.addPage(); y = 50; }
-      // 월별 헤더 강조 - 동적 높이 계산
-      const headerText = trimmed.split(/[:\-–：]/).shift()?.trim() || trimmed;
+      if (y > pageBottom - 60) { doc.addPage(); y = 50; }
+      // 월별 헤더 강조 - 전체 헤더 텍스트를 박스에 포함
       doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
-      const headerH = doc.heightOfString(headerText, { width: contentWidth });
-      const boxH = Math.max(30, headerH + 15);
+      const headerH = doc.heightOfString(trimmed, { width: contentWidth - 10 });
+      const boxH = Math.max(30, headerH + 16);
+      doc.save();
       doc.roundedRect(margin - 3, y - 4, contentWidth + 6, boxH, 3).fill('#f5f0eb');
-      doc.text(headerText, margin, y + 4, { width: contentWidth });
-      y = Math.max(doc.y, y + boxH) + 6;
-      // 월별 본문 (헤더 뒤 부분)
-      const rest = trimmed.replace(/^[^\:\-–：]+[\:\-–：]\s*/, '');
-      if (rest && rest !== trimmed) {
-        doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
-        const rh = doc.heightOfString(rest, { width: contentWidth - indent, lineGap }) + 8;
-        if (y + rh > pageBottom) { doc.addPage(); y = 50; }
-        doc.text(rest, margin + indent, y, { width: contentWidth - indent, lineGap });
-        y = doc.y + paraGap;
-      }
+      doc.restore();
+      doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
+      doc.text(trimmed, margin + 5, y + 4, { width: contentWidth - 10 });
+      y = Math.max(doc.y + 8, y + boxH + 6);
     } else if (isBoldLine) {
       y += 8;
       if (y > pageBottom) { doc.addPage(); y = 50; }
@@ -694,43 +687,18 @@ function renderNarrativeChapterLarge(
       y = doc.y + 14;
     } else {
       // 일반 본문 (sajulab.kr 스타일 - 큰 글씨 + 넓은 행간 + 들여쓰기)
-      if (y > pageBottom) { doc.addPage(); y = 50; }
+      // 페이지 하단 여유 부족 시 새 페이지
+      if (y > pageBottom - 50) { doc.addPage(); y = 50; }
 
-      // 첫 줄 들여쓰기 적용
       const indentedText = ' ' + trimmed;
       doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
-      const textHeight = doc.heightOfString(indentedText, { width: contentWidth, lineGap }) + 8;
 
-      if (y + textHeight > pageBottom) {
-        // 긴 텍스트 - 문장 단위로 분할
-        const sentences = trimmed.match(/[^.!?。]+[.!?。]?\s*/g) || [trimmed];
-        let currentText = '';
-        let isFirst = true;
+      // PDFKit 내장 페이지 넘김에 의존 + doc.y로 정확한 위치 추적
+      doc.text(indentedText, margin, y, { width: contentWidth, lineGap });
+      y = doc.y + paraGap;
 
-        for (const sentence of sentences) {
-          const prefix = isFirst ? ' ' : '';
-          const test = currentText + (currentText ? '' : prefix) + sentence;
-          const testH = doc.heightOfString(test, { width: contentWidth, lineGap }) + 8;
-
-          if (y + testH > pageBottom && currentText) {
-            doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
-            doc.addPage();
-            y = 50;
-            currentText = sentence;
-            isFirst = false;
-          } else {
-            currentText = test;
-          }
-        }
-
-        if (currentText.trim()) {
-          doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
-          y = doc.y + paraGap;
-        }
-      } else {
-        doc.text(indentedText, margin, y, { width: contentWidth, lineGap });
-        y = doc.y + paraGap;
-      }
+      // 안전장치: 페이지 넘어갔으면 위치 보정
+      if (y > pageBottom) { doc.addPage(); y = 50; }
     }
   }
 }
