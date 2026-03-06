@@ -1711,12 +1711,12 @@ function renderFourPillars(doc: PDFKit.PDFDocument, result: SajuResult, koreanFo
   doc.font(koreanFont).fontSize(8.5).fillColor('#6b7280');
   doc.text('오행의 조화와 균형', tableX + 16, ty + 30);
 
-  // 용신/희신/기신/구신/한신 배지 (오행만 표시)
+  // 용신/희신/기신/구신/한신 배지 (오행만 표시, yongShinSystem 우선)
   const ys = result.yongShinSystem;
   const gods = [
-    { label: '용신', value: result.yongSin },
+    { label: '용신', value: ys?.yongSin || result.yongSin },
     { label: '희신', value: ys?.huiSin || '화' },
-    { label: '기신', value: result.giSin },
+    { label: '기신', value: ys?.giSin || result.giSin },
     { label: '구신', value: ys?.guSin || '수' },
     { label: '한신', value: ys?.hanSin || '금' },
   ];

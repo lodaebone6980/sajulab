@@ -112,10 +112,13 @@ export function analyzeSaju(birthInfo: BirthInfo): SajuResult {
     yP.earthlyBranch, mP.earthlyBranch, dP.earthlyBranch, hP.earthlyBranch,
   );
 
-  // 용신 5체계
+  // 용신 5체계 (top-level yongSin/giSin도 5체계에서 통일)
   const yongShinSystem = determineYongShinSystem(
     dayStemElement, elementDistribution, strength, dP.heavenlyStem,
   );
+  // 5체계 결과로 top-level 용신/기신 동기화
+  const yongSinFinal = yongShinSystem.yongSin;
+  const giSinFinal = yongShinSystem.giSin;
 
   // 십이운성
   const twelveStages = calculateTwelveStages(
@@ -164,8 +167,8 @@ export function analyzeSaju(birthInfo: BirthInfo): SajuResult {
     tenGods,
     fortune,
     daeUn,
-    yongSin,
-    giSin,
+    yongSin: yongSinFinal,
+    giSin: giSinFinal,
     calculationSource,
     strength,
     yongShinSystem,
