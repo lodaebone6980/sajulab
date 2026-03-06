@@ -670,15 +670,10 @@ function renderNarrativeChapterLarge(
     } else if (isMonthHeader) {
       y += 20;
       if (y > pageBottom - 60) { doc.addPage(); y = 50; }
-      // 월별 헤더 강조 - 좌측 세로바 + 볼드 텍스트 (heightOfString 부정확 문제 회피)
+      // 월별 헤더 강조 - 순수 볼드 텍스트만 (shape/fill 호출이 PDFKit 텍스트 상태를 오염)
       doc.font(koreanBoldFont).fontSize(15).fillColor('#5c3a2e');
-      const startY = y;
-      doc.text(trimmed, margin + 10, y, { width: contentWidth - 16, lineGap: 6 });
-      const textEndY = doc.y;  // fill() 호출 전에 반드시 저장
-      const actualH = textEndY - startY;
-      // 좌측 장식 세로바 (fill()이 doc.y를 변경할 수 있으므로 textEndY 사용)
-      doc.rect(margin - 2, startY - 2, 4, actualH + 4).fill('#d4a574');
-      y = textEndY + 12;
+      doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 6 });
+      y = doc.y + 12;
     } else if (isBoldLine) {
       y += 8;
       if (y > pageBottom) { doc.addPage(); y = 50; }
