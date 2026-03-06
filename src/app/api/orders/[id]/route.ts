@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/middleware';
-import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, updateCustomer, getPdfDir, getDb, saveFortuneData, saveNarrative } from '@/lib/db/index';
+import { getOrderById, updateOrderStatus, updateOrderResult, updateOrderProgress, updateCustomer, getPdfDir, getDb, saveFortuneData, saveNarrative, getNarrative } from '@/lib/db/index';
 import { uploadPdfToUserDrive } from '@/lib/google-drive/upload-helper';
 import { analyzeSajuWithFortune } from '@/lib/saju';
 import { convertSajuResultToSections, countTotalLines } from '@/lib/saju/fortune-data';
@@ -86,6 +86,62 @@ export async function PATCH(
       });
 
       return NextResponse.json({ message: '재분석이 시작되었습니다.' });
+    }
+
+    // PDF만 재생성 (DB에 캐시된 내러티브 사용, LLM 호출 없음)
+    if (action === 'regenerate_pdf') {
+      const order = getOrderById(orderId, auth.userId) as any;
+      if (!order) return NextResponse.json({ error: '주문을 찾을 수 없습니다.' }, { status: 404 });
+
+      try {
+        updateOrderStatus(orderId, auth.userId, 'pdf_generating');
+        updateOrderProgress(orderId, auth.userId, 50, 'PDF 재생성 시작 (캐시된 내러티브 사용)');
+
+        // DB에서 저장된 내러티브 로드
+        const cachedNarrative = getNarrative(orderId);
+        if (!cachedNarrative || !cachedNarrative.chapters_json) {
+          updateOrderStatus(orderId, auth.userId, 'failed');
+          return NextResponse.json({ error: '저장된 내러티브가 없습니다. 재분석을 먼저 실행하세요.' }, { status: 400 });
+        }
+
+        // 사주 결과 로드
+        if (!order.result) {
+          updateOrderStatus(orderId, auth.userId, 'failed');
+          return NextResponse.json({ error: '저장된 분석 결과가 없습니다.' }, { status: 400 });
+        }
+
+        const sajuResult = JSON.parse(order.result);
+        const narrative = {
+          greeting: cachedNarrative.greeting,
+          chapters: JSON.parse(cachedNarrative.chapters_json),
+          model: cachedNarrative.model,
+        };
+
+        updateOrderProgress(orderId, auth.userId, 70, 'PDF 파일 생성중');
+
+        const pdfBuffer = await generateSajuPdf(sajuResult, {
+          customerName: order.customer_name,
+          productName: order.product_name,
+          productCode: order.product_code,
+          narrative,
+        });
+
+        const pdfDir = getPdfDir();
+        fs.writeFileSync(path.join(pdfDir, `${orderId}.pdf`), pdfBuffer);
+
+        const db = getDb();
+        db.prepare('UPDATE orders SET pdf_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?')
+          .run(`/api/orders/${orderId}/pdf`, orderId, auth.userId);
+
+        updateOrderProgress(orderId, auth.userId, 100, 'PDF 재생성 완료');
+        updateOrderStatus(orderId, auth.userId, 'completed');
+
+        return NextResponse.json({ message: 'PDF가 재생성되었습니다.' });
+      } catch (error) {
+        console.error('PDF regeneration failed:', error);
+        updateOrderStatus(orderId, auth.userId, 'failed');
+        return NextResponse.json({ error: 'PDF 재생성에 실패했습니다.' }, { status: 500 });
+      }
     }
 
     // 상태 변경

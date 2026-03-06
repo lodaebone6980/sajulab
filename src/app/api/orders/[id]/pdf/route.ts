@@ -43,7 +43,7 @@ export async function GET(
         headers: {
           'Content-Type': 'application/pdf',
           'Content-Disposition': `inline; filename="order-${orderId}.pdf"`,
-          'Cache-Control': 'public, max-age=86400',
+          'Cache-Control': 'no-cache, must-revalidate',
         },
       });
     }
