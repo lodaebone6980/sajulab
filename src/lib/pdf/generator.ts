@@ -657,7 +657,8 @@ function renderNarrativeChapterLarge(
     const isSubheading = trimmed.startsWith('[') && trimmed.endsWith(']');
     const isBoldLine = trimmed.startsWith('■') || trimmed.startsWith('●') || trimmed.startsWith('▶') || trimmed.startsWith('★') || trimmed.startsWith('◆');
     // 월 헤더: "12월: 경자(庚子) - 편인 · 제왕" 형태만 매칭 (본문 "12월은..." 제외)
-    const isMonthHeader = /^\d{1,2}월\s*[:：\-–]/.test(trimmed);
+    // 길이 제한: 실제 헤더는 짧음 (60자 미만). 긴 텍스트는 본문으로 처리
+    const isMonthHeader = /^\d{1,2}월\s*[:：\-–]/.test(trimmed) && trimmed.length < 80;
 
     if (isSubheading) {
       y += 28;
@@ -669,16 +670,16 @@ function renderNarrativeChapterLarge(
     } else if (isMonthHeader) {
       y += 20;
       if (y > pageBottom - 60) { doc.addPage(); y = 50; }
-      // 월별 헤더 강조 - 전체 헤더 텍스트를 박스에 포함
-      doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
-      const headerH = doc.heightOfString(trimmed, { width: contentWidth - 10 });
-      const boxH = Math.max(30, headerH + 16);
+      // 월별 헤더 강조 - 좌측 세로바 + 볼드 텍스트 (heightOfString 부정확 문제 회피)
+      doc.font(koreanBoldFont).fontSize(15).fillColor('#5c3a2e');
+      const startY = y;
+      doc.text(trimmed, margin + 10, y, { width: contentWidth - 16, lineGap: 6 });
+      const actualH = doc.y - startY;
+      // 좌측 장식 세로바
       doc.save();
-      doc.roundedRect(margin - 3, y - 4, contentWidth + 6, boxH, 3).fill('#f5f0eb');
+      doc.rect(margin - 2, startY - 2, 4, actualH + 4).fill('#d4a574');
       doc.restore();
-      doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
-      doc.text(trimmed, margin + 5, y + 4, { width: contentWidth - 10 });
-      y = Math.max(doc.y + 8, y + boxH + 6);
+      y = doc.y + 12;
     } else if (isBoldLine) {
       y += 8;
       if (y > pageBottom) { doc.addPage(); y = 50; }
