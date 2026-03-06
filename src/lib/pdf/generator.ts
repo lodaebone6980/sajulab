@@ -664,9 +664,8 @@ function renderNarrativeChapterLarge(
       if (y > pageBottom) { doc.addPage(); y = 50; }
       doc.font(koreanBoldFont).fontSize(16).fillColor('#6b3a3a');
       const subTitle = trimmed.replace(/[\[\]]/g, '');
-      const h = doc.heightOfString(subTitle, { width: contentWidth, lineGap: 8 });
       doc.text(subTitle, margin, y, { width: contentWidth, lineGap: 8 });
-      y += h + 18;
+      y = doc.y + 18;
     } else if (isMonthHeader) {
       y += 20;
       if (y > pageBottom) { doc.addPage(); y = 50; }
@@ -674,26 +673,25 @@ function renderNarrativeChapterLarge(
       const headerText = trimmed.split(/[:\-–：]/).shift()?.trim() || trimmed;
       doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
       const headerH = doc.heightOfString(headerText, { width: contentWidth });
-      const boxH = Math.max(30, headerH + 10);
+      const boxH = Math.max(30, headerH + 15);
       doc.roundedRect(margin - 3, y - 4, contentWidth + 6, boxH, 3).fill('#f5f0eb');
       doc.text(headerText, margin, y + 4, { width: contentWidth });
-      y += boxH + 6;
+      y = Math.max(doc.y, y + boxH) + 6;
       // 월별 본문 (헤더 뒤 부분)
       const rest = trimmed.replace(/^[^\:\-–：]+[\:\-–：]\s*/, '');
       if (rest && rest !== trimmed) {
         doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
-        const rh = doc.heightOfString(rest, { width: contentWidth - indent, lineGap });
+        const rh = doc.heightOfString(rest, { width: contentWidth - indent, lineGap }) + 8;
         if (y + rh > pageBottom) { doc.addPage(); y = 50; }
         doc.text(rest, margin + indent, y, { width: contentWidth - indent, lineGap });
-        y += rh + paraGap;
+        y = doc.y + paraGap;
       }
     } else if (isBoldLine) {
       y += 8;
       if (y > pageBottom) { doc.addPage(); y = 50; }
       doc.font(koreanBoldFont).fontSize(14).fillColor('#374151');
-      const h = doc.heightOfString(trimmed, { width: contentWidth, lineGap: 8 });
       doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 8 });
-      y += h + 14;
+      y = doc.y + 14;
     } else {
       // 일반 본문 (sajulab.kr 스타일 - 큰 글씨 + 넓은 행간 + 들여쓰기)
       if (y > pageBottom) { doc.addPage(); y = 50; }
@@ -701,7 +699,7 @@ function renderNarrativeChapterLarge(
       // 첫 줄 들여쓰기 적용
       const indentedText = ' ' + trimmed;
       doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
-      const textHeight = doc.heightOfString(indentedText, { width: contentWidth, lineGap });
+      const textHeight = doc.heightOfString(indentedText, { width: contentWidth, lineGap }) + 8;
 
       if (y + textHeight > pageBottom) {
         // 긴 텍스트 - 문장 단위로 분할
@@ -712,7 +710,7 @@ function renderNarrativeChapterLarge(
         for (const sentence of sentences) {
           const prefix = isFirst ? ' ' : '';
           const test = currentText + (currentText ? '' : prefix) + sentence;
-          const testH = doc.heightOfString(test, { width: contentWidth, lineGap });
+          const testH = doc.heightOfString(test, { width: contentWidth, lineGap }) + 8;
 
           if (y + testH > pageBottom && currentText) {
             doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
@@ -726,13 +724,12 @@ function renderNarrativeChapterLarge(
         }
 
         if (currentText.trim()) {
-          const h = doc.heightOfString(currentText.trim(), { width: contentWidth, lineGap });
           doc.text(currentText.trim(), margin, y, { width: contentWidth, lineGap });
-          y += h + paraGap;
+          y = doc.y + paraGap;
         }
       } else {
         doc.text(indentedText, margin, y, { width: contentWidth, lineGap });
-        y += textHeight + paraGap;
+        y = doc.y + paraGap;
       }
     }
   }
