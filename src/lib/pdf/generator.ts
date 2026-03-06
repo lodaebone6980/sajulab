@@ -681,18 +681,25 @@ function renderNarrativeChapterLarge(
       doc.text(trimmed, margin, y, { width: contentWidth, lineGap: 8 });
       y = doc.y + 14;
     } else {
-      // 일반 본문 (sajulab.kr 스타일 - 큰 글씨 + 넓은 행간 + 들여쓰기)
-      // 페이지 하단 여유 부족 시 새 페이지
+      // 일반 본문 - 문장 단위 분리 렌더링 (PDFKit 한글 다줄 렌더링 버그 회피)
       if (y > pageBottom - 50) { doc.addPage(); y = 50; }
 
-      const indentedText = ' ' + trimmed;
-      doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
+      // 문장 단위로 분리 (.!?。 기준, 마침표 뒤 공백 포함)
+      const sentences = trimmed.match(/[^.!?。]+[.!?。]+\s*/g);
+      const chunks: string[] = sentences && sentences.length > 0
+        ? sentences.map((s, i) => i === 0 ? ' ' + s.trim() : s.trim())
+        : [' ' + trimmed];
 
-      // PDFKit 내장 페이지 넘김에 의존 + doc.y로 정확한 위치 추적
-      doc.text(indentedText, margin, y, { width: contentWidth, lineGap });
-      y = doc.y + paraGap;
+      for (let ci = 0; ci < chunks.length; ci++) {
+        const chunk = chunks[ci];
+        if (!chunk.trim()) continue;
+        if (y > pageBottom - 40) { doc.addPage(); y = 50; }
+        doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
+        doc.text(chunk, margin, y, { width: contentWidth, lineGap });
+        y = doc.y + 2; // 문장 간 최소 간격
+      }
+      y += paraGap - 2; // 문단 간격 보충
 
-      // 안전장치: 페이지 넘어갔으면 위치 보정
       if (y > pageBottom) { doc.addPage(); y = 50; }
     }
   }
