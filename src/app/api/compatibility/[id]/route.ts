@@ -8,37 +8,44 @@ import { analyzeCompatibility } from '@/lib/saju/compatibility';
 import type { CompatibilityResult } from '@/lib/saju/compatibility';
 import type { SajuResult } from '@/lib/saju/types';
 
-// ── 구어체 궁합 텍스트 생성 ──
+// ── 궁합 중심 서술 텍스트 생성 ──
 
-function getElementKoName(el: string): string {
-  const map: Record<string, string> = { '목': '나무(木)', '화': '불(火)', '토': '흙(土)', '금': '쇠(金)', '수': '물(水)' };
-  return map[el] || el;
+function elName(el: string): string {
+  const m: Record<string, string> = { '목': '나무(木)', '화': '불(火)', '토': '흙(土)', '금': '쇠(金)', '수': '물(水)' };
+  return m[el] || el;
 }
 
-function getGenderLabel(g: string): string {
-  return g === 'male' ? '남성' : '여성';
+function genderStr(g: string): string { return g === 'male' ? '남' : '여'; }
+function calStr(c: string): string { return c === 'lunar' ? '음력' : c === 'leap' ? '윤달' : '양력'; }
+
+function gradeNarrative(score: number, p1: string, p2: string): string {
+  if (score >= 85)
+    return `두 분의 사주를 종합적으로 살펴보았을 때, 서로의 기운이 자연스럽게 맞물리는 매우 좋은 궁합입니다. ${p1}님과 ${p2}님은 함께 있을 때 서로의 부족한 부분을 채워주고, 시너지를 내는 관계라 할 수 있습니다.`;
+  if (score >= 70)
+    return `전체적으로 보면 ${p1}님과 ${p2}님의 궁합은 양호한 편입니다. 서로 보완해주는 요소가 많고, 갈등 요소는 상대적으로 적은 구성입니다. 약간의 배려만 더한다면 오래도록 좋은 관계를 유지할 수 있습니다.`;
+  if (score >= 50)
+    return `${p1}님과 ${p2}님의 궁합은 보통 수준입니다. 특별히 크게 좋거나 나쁜 점이 두드러지지는 않으며, 두 분이 어떻게 관계를 풀어가느냐에 따라 결과가 달라지는 구성입니다.`;
+  if (score >= 30)
+    return `솔직히 말씀드리면, ${p1}님과 ${p2}님의 사주 구성은 서로 부딪히는 부분이 있습니다. 그러나 궁합이란 운명이 아니라 참고 자료입니다. 서로의 차이를 이해하고 노력한다면 충분히 좋은 관계를 만들어갈 수 있습니다.`;
+  return `${p1}님과 ${p2}님의 사주에는 상극의 기운이 다소 강하게 작용합니다. 서로의 에너지가 충돌하는 부분이 있어 갈등이 생기기 쉬운 구조이지만, 이를 알고 대비한다면 오히려 성장의 기회가 될 수 있습니다.`;
 }
 
-function getCalendarLabel(c: string): string {
-  if (c === 'lunar') return '음력';
-  if (c === 'leap') return '윤달';
-  return '양력';
-}
+// 세부 항목별로 궁합을 줄글로 풀어서 서술
+function detailNarrative(d: { category: string; score: number; maxScore: number; description: string; rating: string }, p1: string, p2: string): string {
+  const cat = d.category;
+  const desc = d.description;
 
-function getScoreEmoji(score: number): string {
-  if (score >= 85) return '💕';
-  if (score >= 70) return '😊';
-  if (score >= 50) return '🤝';
-  if (score >= 30) return '💪';
-  return '⚡';
-}
-
-function getGradeComment(score: number): string {
-  if (score >= 85) return '정말 좋은 인연이에요! 하늘이 맺어준 인연이라 해도 과언이 아닐 정도입니다.';
-  if (score >= 70) return '꽤 잘 맞는 궁합이에요. 서로에게 좋은 영향을 주는 관계입니다.';
-  if (score >= 50) return '나쁘지 않은 궁합이에요. 서로 조금만 신경 쓰면 충분히 좋은 관계를 이어갈 수 있습니다.';
-  if (score >= 30) return '솔직히 쉽지는 않은 궁합이에요. 하지만 노력한다면 충분히 극복할 수 있습니다.';
-  return '상극의 기운이 좀 강한 편이에요. 서로를 이해하려는 마음이 무엇보다 중요합니다.';
+  if (d.rating === 'excellent') {
+    return `${cat} 부분은 두 분에게 큰 강점입니다. ${desc} 이 부분에서 ${p1}님과 ${p2}님은 서로에게 매우 긍정적인 영향을 주고받는 관계입니다.`;
+  } else if (d.rating === 'good') {
+    return `${cat} 측면에서 두 분은 괜찮은 조합을 이루고 있습니다. ${desc} 큰 문제 없이 안정적인 흐름을 기대할 수 있습니다.`;
+  } else if (d.rating === 'neutral') {
+    return `${cat}에서는 특별히 좋거나 나쁜 점 없이 무난한 편입니다. ${desc}`;
+  } else if (d.rating === 'caution') {
+    return `${cat} 부분은 조금 신경 써야 합니다. ${desc} 이 부분에서 갈등이 생길 수 있으니, 서로 한 발짝 양보하는 자세가 도움이 됩니다.`;
+  } else {
+    return `${cat}은 두 분 사이에서 주의가 필요한 영역입니다. ${desc} 이 부분을 미리 인지하고 있으면 불필요한 충돌을 줄일 수 있습니다.`;
+  }
 }
 
 function formatCompatibilityText(
@@ -51,240 +58,191 @@ function formatCompatibilityText(
 ): string {
   const p1 = person1.name;
   const p2 = person2.name;
-  const lines: string[] = [];
+  const L: string[] = [];
 
-  // ── 인사 & 기본 정보 ──
-  lines.push(`안녕하세요, ${p1}님과 ${p2}님의 궁합 분석 결과를 알려드릴게요.`);
-  lines.push('');
+  // ── 1. 도입부 ──
+  L.push(`${p1}님과 ${p2}님의 궁합 분석 결과입니다.`);
+  if (relationLabel) L.push(`관계: ${relationLabel}`);
+  L.push(`${p1}님(${person1.birth_date}, ${calStr(person1.calendar_type)}, ${genderStr(person1.gender)}) / ${p2}님(${person2.birth_date}, ${calStr(person2.calendar_type)}, ${genderStr(person2.gender)})`);
+  L.push('');
 
-  if (relationLabel) {
-    lines.push(`두 분의 관계는 "${relationLabel}"(으)로 등록되어 있네요.`);
-  }
+  // ── 2. 종합 점수 ──
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push(`■ 궁합 종합`);
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push('');
+  L.push(`두 분의 궁합은 100점 만점 기준 ${result.totalScore}점입니다.`);
+  L.push(`등급: ${result.grade}`);
+  L.push('');
+  L.push(gradeNarrative(result.totalScore, p1, p2));
+  L.push('');
 
-  lines.push(`${p1}님은 ${person1.birth_date} ${getCalendarLabel(person1.calendar_type)} 출생 ${getGenderLabel(person1.gender)}이시고, ${p2}님은 ${person2.birth_date} ${getCalendarLabel(person2.calendar_type)} 출생 ${getGenderLabel(person2.gender)}이십니다.`);
-  lines.push('');
+  // ── 3. 두 사람의 사주 구성 (간략) ──
+  const ds1Ko = saju1.fourPillars.day.heavenlyStemKo;
+  const ds2Ko = saju2.fourPillars.day.heavenlyStemKo;
+  const de1Ko = saju1.fourPillars.day.elementKo;
+  const de2Ko = saju2.fourPillars.day.elementKo;
 
-  // ── 두 사람의 사주 성격 ──
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push(`✦ 두 분의 타고난 기질`);
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push('');
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push(`■ 사주 구성 비교`);
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push('');
+  L.push(`${p1}님의 일간은 ${ds1Ko}(${saju1.fourPillars.day.heavenlyStem})으로 ${elName(de1Ko)}의 기운이며, ${p2}님의 일간은 ${ds2Ko}(${saju2.fourPillars.day.heavenlyStem})으로 ${elName(de2Ko)}의 기운입니다.`);
+  L.push('');
 
-  const dayStem1Ko = saju1.fourPillars.day.heavenlyStemKo;
-  const dayStem2Ko = saju2.fourPillars.day.heavenlyStemKo;
-  const dayEl1Ko = saju1.fourPillars.day.elementKo;
-  const dayEl2Ko = saju2.fourPillars.day.elementKo;
-
-  lines.push(`먼저 ${p1}님부터 볼게요. ${p1}님의 일간은 ${dayStem1Ko}(${saju1.fourPillars.day.heavenlyStem}), ${getElementKoName(dayEl1Ko)}의 기운을 타고나셨어요.`);
-  if (saju1.fortune?.personality) {
-    lines.push(`${saju1.fortune.personality}`);
-  }
-  lines.push('');
-
-  lines.push(`다음은 ${p2}님이에요. ${p2}님의 일간은 ${dayStem2Ko}(${saju2.fourPillars.day.heavenlyStem}), ${getElementKoName(dayEl2Ko)}의 기운이에요.`);
-  if (saju2.fortune?.personality) {
-    lines.push(`${saju2.fortune.personality}`);
-  }
-  lines.push('');
-
-  // ── 오행 분포 비교 ──
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push(`✦ 오행 에너지 비교`);
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push('');
-
+  // 오행 분포
   const ed1 = saju1.elementDistribution;
   const ed2 = saju2.elementDistribution;
+  L.push(`오행 분포로 보면, ${p1}님은 목${ed1.wood} · 화${ed1.fire} · 토${ed1.earth} · 금${ed1.metal} · 수${ed1.water}이고, ${p2}님은 목${ed2.wood} · 화${ed2.fire} · 토${ed2.earth} · 금${ed2.metal} · 수${ed2.water}입니다.`);
+  L.push('');
 
-  lines.push(`${p1}님의 오행 분포를 보면, 목(${ed1.wood}) · 화(${ed1.fire}) · 토(${ed1.earth}) · 금(${ed1.metal}) · 수(${ed1.water})로 구성되어 있고요,`);
-  lines.push(`${p2}님은 목(${ed2.wood}) · 화(${ed2.fire}) · 토(${ed2.earth}) · 금(${ed2.metal}) · 수(${ed2.water})의 분포를 보입니다.`);
-  lines.push('');
+  // 용신/기신 궁합 관계
+  const yong1 = String(saju1.yongSin?.element || saju1.yongSin || '목');
+  const yong2 = String(saju2.yongSin?.element || saju2.yongSin || '목');
+  const gi1 = String(saju1.giSin?.element || saju1.giSin || '목');
+  const gi2 = String(saju2.giSin?.element || saju2.giSin || '목');
 
-  // 오행 보완 관계 서술
-  const yong1 = saju1.yongSin?.element || saju1.yongSin || '목';
-  const yong2 = saju2.yongSin?.element || saju2.yongSin || '목';
-  const gi1 = saju1.giSin?.element || saju1.giSin || '목';
-  const gi2 = saju2.giSin?.element || saju2.giSin || '목';
+  L.push(`용신(필요한 기운)을 기준으로 보면, ${p1}님의 용신은 ${elName(yong1)}, ${p2}님의 용신은 ${elName(yong2)}입니다.`);
 
-  lines.push(`${p1}님에게 필요한 기운(용신)은 ${getElementKoName(String(yong1))}이고, 피해야 할 기운(기신)은 ${getElementKoName(String(gi1))}이에요.`);
-  lines.push(`${p2}님에게 필요한 기운(용신)은 ${getElementKoName(String(yong2))}이고, 피해야 할 기운(기신)은 ${getElementKoName(String(gi2))}이고요.`);
-  lines.push('');
-
-  // 서로 보완 여부 체크
-  if (String(dayEl2Ko) === String(yong1)) {
-    lines.push(`재미있는 건, ${p2}님의 타고난 기운이 바로 ${p1}님이 필요로 하는 용신 오행이라는 거예요. 그러니까 ${p2}님이 옆에 있는 것만으로도 ${p1}님에게 좋은 기운이 된다는 뜻이죠.`);
+  // 용신 보완 관계를 궁합 관점에서 서술
+  if (de2Ko === yong1 && de1Ko === yong2) {
+    L.push(`두 분의 타고난 기운이 서로의 용신과 일치합니다. 이는 상대가 존재하는 것만으로도 내게 이로운 기운을 가져다주는, 매우 이상적인 궁합 구조입니다.`);
+  } else if (de2Ko === yong1) {
+    L.push(`${p2}님의 기운이 ${p1}님의 용신과 일치하여, ${p1}님 입장에서 ${p2}님은 큰 도움이 되는 존재입니다.`);
+  } else if (de1Ko === yong2) {
+    L.push(`${p1}님의 기운이 ${p2}님의 용신과 일치하여, ${p2}님 입장에서 ${p1}님은 든든한 존재가 됩니다.`);
   }
-  if (String(dayEl1Ko) === String(yong2)) {
-    lines.push(`반대로 ${p1}님의 기운도 ${p2}님에게 필요한 용신과 같아서, 서로가 서로에게 좋은 영향을 주는 관계예요.`);
-  }
-  if (String(dayEl2Ko) === String(gi1)) {
-    lines.push(`다만 ${p2}님의 기운이 ${p1}님의 기신과 같은 부분이 있어서, 가끔 부담으로 느껴질 수도 있어요. 이 부분은 서로 이해하면 충분히 극복 가능합니다.`);
-  }
-  if (String(dayEl1Ko) === String(gi2)) {
-    lines.push(`또한 ${p1}님의 기운이 ${p2}님의 기신과 닿아 있어서, 무의식적으로 스트레스를 줄 수 있는 면이 있어요. 의식적으로 배려하면 좋겠습니다.`);
-  }
-  lines.push('');
 
-  // ── 종합 궁합 점수 ──
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push(`✦ 궁합 종합 결과 ${getScoreEmoji(result.totalScore)}`);
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push('');
+  if (de2Ko === gi1) {
+    L.push(`다만 ${p2}님의 기운이 ${p1}님의 기신(부담이 되는 기운)과 겹치는 면이 있어, ${p1}님이 무의식적으로 피로감을 느낄 수 있습니다.`);
+  }
+  if (de1Ko === gi2) {
+    L.push(`또한 ${p1}님의 기운이 ${p2}님의 기신과 겹치는 면이 있어, ${p2}님에게 부담을 줄 수 있는 부분입니다.`);
+  }
+  L.push('');
 
-  lines.push(`${p1}님과 ${p2}님의 궁합 점수는 100점 만점에 ${result.totalScore}점이에요!`);
-  lines.push(`등급으로 보면 "${result.grade}"에 해당합니다.`);
-  lines.push('');
-  lines.push(getGradeComment(result.totalScore));
-  lines.push('');
-
-  // ── 세부 항목별 서술 ──
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push(`✦ 항목별 궁합 풀이`);
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push('');
+  // ── 4. 세부 궁합 항목 (줄글 서술) ──
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push(`■ 세부 궁합 분석`);
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push('');
 
   for (const d of result.details) {
-    const pct = d.maxScore > 0 ? Math.round((Math.max(0, d.score) / d.maxScore) * 100) : 0;
-    let ratingWord = '';
-    if (d.rating === 'excellent') ratingWord = '아주 좋아요!';
-    else if (d.rating === 'good') ratingWord = '괜찮은 편이에요.';
-    else if (d.rating === 'neutral') ratingWord = '무난한 편이에요.';
-    else if (d.rating === 'caution') ratingWord = '조금 주의가 필요해요.';
-    else ratingWord = '신경 써야 할 부분이에요.';
-
-    lines.push(`▸ ${d.category} (${d.score}/${d.maxScore}점) — ${ratingWord}`);
-    lines.push(`  ${d.description}`);
-    lines.push('');
+    L.push(`▸ ${d.category} [${d.score}/${d.maxScore}점]`);
+    L.push(detailNarrative(d, p1, p2));
+    L.push('');
   }
 
-  // ── 강점 ──
-  if (result.strengths.length > 0 && result.strengths[0] !== '특별히 두드러지는 장점은 없으나 무난한 관계입니다') {
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push(`✦ 두 분의 궁합에서 좋은 점`);
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push('');
-    lines.push(`두 분의 사주를 함께 놓고 보면, 이런 점들이 좋아요.`);
-    lines.push('');
+  // ── 5. 궁합의 강점 (줄글) ──
+  const hasRealStrengths = result.strengths.length > 0 && result.strengths[0] !== '특별히 두드러지는 장점은 없으나 무난한 관계입니다';
+  if (hasRealStrengths) {
+    L.push(`━━━━━━━━━━━━━━━━━━━━`);
+    L.push(`■ 두 분의 궁합이 좋은 부분`);
+    L.push(`━━━━━━━━━━━━━━━━━━━━`);
+    L.push('');
+    L.push(`두 분의 사주를 함께 놓고 보면, 다음과 같은 점들이 긍정적으로 작용합니다.`);
+    L.push('');
     for (const s of result.strengths) {
-      lines.push(`  · ${s}`);
+      L.push(`· ${s}`);
     }
-    lines.push('');
+    L.push('');
+    L.push(`이러한 강점들은 두 분이 함께할 때 자연스럽게 드러나는 시너지입니다. 어려운 시기에도 이 부분들이 관계를 지탱해주는 힘이 됩니다.`);
+    L.push('');
   }
 
-  // ── 약점 ──
-  if (result.weaknesses.length > 0 && result.weaknesses[0] !== '특별히 큰 약점은 없습니다') {
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push(`✦ 주의하면 좋을 점`);
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push('');
-    lines.push(`반면에 이런 부분들은 좀 신경 쓰시면 좋겠어요.`);
-    lines.push('');
+  // ── 6. 주의할 점 (줄글) ──
+  const hasRealWeaknesses = result.weaknesses.length > 0 && result.weaknesses[0] !== '특별히 큰 약점은 없습니다';
+  if (hasRealWeaknesses) {
+    L.push(`━━━━━━━━━━━━━━━━━━━━`);
+    L.push(`■ 두 분 사이에서 주의할 부분`);
+    L.push(`━━━━━━━━━━━━━━━━━━━━`);
+    L.push('');
+    L.push(`반면, 다음과 같은 부분에서는 갈등이 생기기 쉬우니 참고하시기 바랍니다.`);
+    L.push('');
     for (const w of result.weaknesses) {
-      lines.push(`  · ${w}`);
+      L.push(`· ${w}`);
     }
-    lines.push('');
+    L.push('');
+    L.push(`이러한 점들은 미리 알고 있으면 불필요한 다툼을 줄일 수 있습니다. 상대의 입장에서 한 번 더 생각하는 습관이 큰 도움이 됩니다.`);
+    L.push('');
   }
 
-  // ── 애정운 비교 ──
-  if (saju1.fortune?.love || saju2.fortune?.love) {
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push(`✦ 두 분의 연애·관계 스타일`);
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push('');
-    if (saju1.fortune?.love) {
-      lines.push(`${p1}님의 연애 스타일을 보면요, ${saju1.fortune.love}`);
-      lines.push('');
+  // ── 7. 관계에서의 오행 에너지 흐름 ──
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push(`■ 관계 속 오행 에너지 흐름`);
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push('');
+
+  // 오행 보완도 분석
+  const elNames: [string, number, number][] = [
+    ['목(木)', ed1.wood, ed2.wood],
+    ['화(火)', ed1.fire, ed2.fire],
+    ['토(土)', ed1.earth, ed2.earth],
+    ['금(金)', ed1.metal, ed2.metal],
+    ['수(水)', ed1.water, ed2.water],
+  ];
+
+  const complementary: string[] = [];
+  const conflicting: string[] = [];
+
+  for (const [name, v1, v2] of elNames) {
+    if (v1 <= 1 && v2 >= 3) {
+      complementary.push(`${p1}님에게 부족한 ${name} 기운을 ${p2}님이 보완해줍니다`);
+    } else if (v2 <= 1 && v1 >= 3) {
+      complementary.push(`${p2}님에게 부족한 ${name} 기운을 ${p1}님이 보완해줍니다`);
     }
-    if (saju2.fortune?.love) {
-      lines.push(`${p2}님은요, ${saju2.fortune.love}`);
-      lines.push('');
+    if (v1 >= 4 && v2 >= 4) {
+      conflicting.push(`두 분 모두 ${name} 기운이 강해서, 같은 방향으로 과하게 쏠릴 수 있습니다`);
     }
   }
 
-  // ── 건강운 비교 ──
-  if (saju1.fortune?.health || saju2.fortune?.health) {
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push(`✦ 건강 면에서 서로 챙겨줄 점`);
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push('');
-    if (saju1.fortune?.health) {
-      lines.push(`${p1}님은 ${saju1.fortune.health}`);
-      lines.push('');
-    }
-    if (saju2.fortune?.health) {
-      lines.push(`${p2}님은 ${saju2.fortune.health}`);
-      lines.push('');
-    }
-    lines.push(`서로의 건강 취약점을 알고 있으면, 함께 있을 때 더 잘 챙겨줄 수 있겠죠?`);
-    lines.push('');
+  if (complementary.length > 0) {
+    L.push(`오행 에너지 측면에서, 두 분은 서로 부족한 부분을 채워주는 관계입니다.`);
+    for (const c of complementary) L.push(`· ${c}`);
+    L.push('');
+  }
+  if (conflicting.length > 0) {
+    L.push(`다만 주의할 점도 있습니다.`);
+    for (const c of conflicting) L.push(`· ${c}`);
+    L.push(`이런 경우 한쪽이 의식적으로 균형을 잡아주는 역할을 하면 좋습니다.`);
+    L.push('');
+  }
+  if (complementary.length === 0 && conflicting.length === 0) {
+    L.push(`오행 분포에서 특별히 강하게 보완하거나 충돌하는 부분은 없으며, 무난한 에너지 조합입니다.`);
+    L.push('');
   }
 
-  // ── 재물운 비교 ──
-  if (saju1.fortune?.wealth || saju2.fortune?.wealth) {
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push(`✦ 재물·경제적 궁합`);
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push('');
-    if (saju1.fortune?.wealth) {
-      lines.push(`${p1}님의 재물운을 보면, ${saju1.fortune.wealth}`);
-      lines.push('');
-    }
-    if (saju2.fortune?.wealth) {
-      lines.push(`${p2}님의 재물운은요, ${saju2.fortune.wealth}`);
-      lines.push('');
-    }
-    lines.push(`두 분이 경제적으로 어떻게 역할을 나누면 좋을지 참고하시면 좋겠어요.`);
-    lines.push('');
+  // ── 8. 종합 조언 ──
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push(`■ 종합 조언`);
+  L.push(`━━━━━━━━━━━━━━━━━━━━`);
+  L.push('');
+  L.push(result.advice);
+  L.push('');
+
+  // 성격적 궁합 코멘트 (personality 기반으로 두 사람 관계에 대한 코멘트)
+  if (saju1.fortune?.personality && saju2.fortune?.personality) {
+    L.push(`성격적으로 살펴보면, ${p1}님은 ${ds1Ko}${de1Ko} 일간으로 ${saju1.fortune.personality.slice(0, 50).replace(/[.。].*/, '.')} 반면 ${p2}님은 ${ds2Ko}${de2Ko} 일간으로 ${saju2.fortune.personality.slice(0, 50).replace(/[.。].*/, '.')} 이러한 성향의 차이를 이해하고 존중하는 것이 건강한 관계의 기본입니다.`);
+    L.push('');
   }
 
-  // ── 직업·방향성 비교 ──
-  if (saju1.fortune?.career || saju2.fortune?.career) {
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push(`✦ 직업·적성 비교`);
-    lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-    lines.push('');
-    if (saju1.fortune?.career) {
-      lines.push(`${p1}님은 ${saju1.fortune.career}`);
-      lines.push('');
-    }
-    if (saju2.fortune?.career) {
-      lines.push(`${p2}님은 ${saju2.fortune.career}`);
-      lines.push('');
-    }
-    lines.push(`서로의 적성을 이해하고 응원해주는 게 좋은 관계의 비결이에요.`);
-    lines.push('');
-  }
-
-  // ── 종합 조언 ──
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push(`✦ 마무리 조언`);
-  lines.push(`━━━━━━━━━━━━━━━━━━━━`);
-  lines.push('');
-  lines.push(result.advice);
-  lines.push('');
-
-  // 럭키 아이템 서술
+  // 행운 정보
   const lc1 = saju1.fortune?.luckyColor;
   const lc2 = saju2.fortune?.luckyColor;
+  if (lc1 && lc2) {
+    L.push(`참고로 ${p1}님의 행운 색상은 ${lc1}, ${p2}님은 ${lc2}입니다. 함께 있을 때 서로의 행운 색상을 활용해보시면 좋겠습니다.`);
+  }
+
   const ld1 = saju1.fortune?.luckyDirection;
   const ld2 = saju2.fortune?.luckyDirection;
-  const ln1 = saju1.fortune?.luckyNumber;
-  const ln2 = saju2.fortune?.luckyNumber;
-
-  if (lc1 || lc2) {
-    lines.push(`참고로 ${p1}님의 행운 색상은 "${lc1}"이고, ${p2}님은 "${lc2}"예요. 함께 있을 때 서로의 행운 색상을 활용해보세요.`);
+  if (ld1 && ld2) {
+    L.push(`행운의 방위는 ${p1}님이 ${ld1}, ${p2}님이 ${ld2}입니다.`);
   }
-  if (ld1 || ld2) {
-    lines.push(`행운의 방향은 ${p1}님이 "${ld1}", ${p2}님이 "${ld2}"입니다. 여행이나 이사 계획이 있다면 참고하시면 좋겠어요.`);
-  }
-  if (ln1 || ln2) {
-    lines.push(`행운의 숫자는 ${p1}님이 ${ln1}, ${p2}님이 ${ln2}이에요.`);
-  }
-  lines.push('');
+  L.push('');
 
-  lines.push(`이상으로 ${p1}님과 ${p2}님의 궁합 풀이를 마칩니다. 좋은 인연 이어가시길 바랍니다! 🙏`);
+  L.push(`이상 ${p1}님과 ${p2}님의 궁합 분석을 마칩니다.`);
 
-  return lines.join('\n');
+  return L.join('\n');
 }
 
 export async function GET(
