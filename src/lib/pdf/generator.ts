@@ -656,7 +656,8 @@ function renderNarrativeChapterLarge(
     // 소제목 감지
     const isSubheading = trimmed.startsWith('[') && trimmed.endsWith(']');
     const isBoldLine = trimmed.startsWith('■') || trimmed.startsWith('●') || trimmed.startsWith('▶') || trimmed.startsWith('★') || trimmed.startsWith('◆');
-    const isMonthHeader = /^\d{1,2}월/.test(trimmed) || /^[0-9]+월\s/.test(trimmed);
+    // 월 헤더: "12월: 경자(庚子) - 편인 · 제왕" 형태만 매칭 (본문 "12월은..." 제외)
+    const isMonthHeader = /^\d{1,2}월\s*[:：\-–]/.test(trimmed);
 
     if (isSubheading) {
       y += 28;
@@ -669,13 +670,16 @@ function renderNarrativeChapterLarge(
     } else if (isMonthHeader) {
       y += 20;
       if (y > pageBottom) { doc.addPage(); y = 50; }
-      // 월별 헤더 강조
-      doc.roundedRect(margin - 3, y - 4, contentWidth + 6, 30, 3).fill('#f5f0eb');
+      // 월별 헤더 강조 - 동적 높이 계산
+      const headerText = trimmed.split(/[:\-–：]/).shift()?.trim() || trimmed;
       doc.font(koreanBoldFont).fontSize(14).fillColor('#5c3a2e');
-      doc.text(trimmed.split(/[:\-–]/).shift()?.trim() || trimmed, margin, y + 4, { width: contentWidth });
-      y += 36;
-      // 월별 본문
-      const rest = trimmed.replace(/^[^\:\-–]+[\:\-–]\s*/, '');
+      const headerH = doc.heightOfString(headerText, { width: contentWidth });
+      const boxH = Math.max(30, headerH + 10);
+      doc.roundedRect(margin - 3, y - 4, contentWidth + 6, boxH, 3).fill('#f5f0eb');
+      doc.text(headerText, margin, y + 4, { width: contentWidth });
+      y += boxH + 6;
+      // 월별 본문 (헤더 뒤 부분)
+      const rest = trimmed.replace(/^[^\:\-–：]+[\:\-–：]\s*/, '');
       if (rest && rest !== trimmed) {
         doc.font(koreanFont).fontSize(fontSize).fillColor('#374151');
         const rh = doc.heightOfString(rest, { width: contentWidth - indent, lineGap });
